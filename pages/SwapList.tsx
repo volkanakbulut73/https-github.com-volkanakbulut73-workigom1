@@ -1,13 +1,17 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Heart, Loader2, SlidersHorizontal, ChevronDown, X, ChevronLeft } from 'lucide-react';
-import { SwapService, SwapListing } from '../types';
+import { Plus, Search, Loader2, SlidersHorizontal, ChevronLeft, X, Trash2, Tag, User } from 'lucide-react';
+import { SwapService, SwapListing, ReferralService } from '../types';
 
 export const SwapList: React.FC = () => {
   const navigate = useNavigate();
   const [listings, setListings] = useState<SwapListing[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'market' | 'mine'>('market');
+  
+  const currentUser = ReferralService.getUserProfile();
 
   const loadListings = async () => {
     setLoading(true);
@@ -28,6 +32,14 @@ export const SwapList: React.FC = () => {
 
   useEffect(() => { loadListings(); }, []);
 
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); // Kartın detayına gitmesini engelle
+    if (window.confirm('Bu ilanı silmek istediğinize emin misiniz?')) {
+      await SwapService.deleteListing(id);
+      loadListings(); // Listeyi yenile
+    }
+  };
+
   const safeStr = (val: any): string => {
     if (typeof val === 'string') return val;
     if (typeof val === 'number') return String(val);
@@ -41,9 +53,17 @@ export const SwapList: React.FC = () => {
 
   const filteredListings = listings.filter(l => {
     if (!l) return false;
+    
+    // Search filter
     const title = safeStr(l.title).toLowerCase();
     const search = searchTerm.toLowerCase();
-    return title.includes(search);
+    const matchesSearch = title.includes(search);
+
+    // Tab filter
+    const isMine = l.ownerId === currentUser.id;
+    if (activeTab === 'mine' && !isMine) return false;
+
+    return matchesSearch;
   });
 
   return (
@@ -80,10 +100,26 @@ export const SwapList: React.FC = () => {
            </div>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-           <button className="flex items-center gap-1.5 bg-[#FF80AB] text-white px-4 py-2 rounded-xl text-[10px] font-bold shrink-0 shadow-lg shadow-pink-500/20 active:scale-95 transition-transform">
-              <SlidersHorizontal size={12} /> Filtrele
-           </button>
+        {/* Tabs / Filters */}
+        <div className="flex justify-between items-center">
+            <div className="bg-slate-800 p-1 rounded-xl flex gap-1">
+                <button 
+                    onClick={() => setActiveTab('market')}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-[10px] font-bold transition-all ${activeTab === 'market' ? 'bg-white text-slate-900 shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                >
+                    <Tag size={12} /> Pazar
+                </button>
+                <button 
+                    onClick={() => setActiveTab('mine')}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-[10px] font-bold transition-all ${activeTab === 'mine' ? 'bg-white text-slate-900 shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                >
+                    <User size={12} /> İlanlarım
+                </button>
+            </div>
+
+            <button className="flex items-center gap-1.5 bg-[#FF80AB] text-white px-3 py-2 rounded-xl text-[10px] font-bold shrink-0 shadow-lg shadow-pink-500/20 active:scale-95 transition-transform">
+                <SlidersHorizontal size={12} />
+            </button>
         </div>
       </div>
 
@@ -96,9 +132,11 @@ export const SwapList: React.FC = () => {
 
       <div className="px-4 mt-4 relative z-20">
          <div className="flex justify-between items-center mb-4 px-1">
-            <h2 className="font-bold text-slate-800 text-sm">Vitrin Ürünleri</h2>
+            <h2 className="font-bold text-slate-800 text-sm">
+                {activeTab === 'market' ? 'Vitrin Ürünleri' : 'İlanlarım'}
+            </h2>
             <button onClick={loadListings} className="text-[10px] text-primary font-bold flex items-center gap-1">
-               {loading && <Loader2 size={10} className="animate-spin"/>} Tümünü Gör
+               {loading && <Loader2 size={10} className="animate-spin"/>} Yenile
             </button>
          </div>
 
@@ -109,8 +147,15 @@ export const SwapList: React.FC = () => {
             </div>
          ) : filteredListings.length === 0 ? (
             <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100">
-               <p className="text-gray-400 text-xs font-medium">Aradığınız kriterlere uygun ilan bulunamadı.</p>
-               <button onClick={() => setSearchTerm('')} className="mt-2 text-primary text-xs font-bold">Aramayı Temizle</button>
+               <p className="text-gray-400 text-xs font-medium">
+                   {activeTab === 'mine' ? 'Henüz hiç ilan vermediniz.' : 'Aradığınız kriterlere uygun ilan bulunamadı.'}
+               </p>
+               {activeTab === 'market' && (
+                   <button onClick={() => setSearchTerm('')} className="mt-2 text-primary text-xs font-bold">Aramayı Temizle</button>
+               )}
+               {activeTab === 'mine' && (
+                   <button onClick={() => navigate('/swap/create')} className="mt-2 text-primary text-xs font-bold">Hemen İlan Ver</button>
+               )}
             </div>
          ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 pb-4">
@@ -122,7 +167,7 @@ export const SwapList: React.FC = () => {
                   const itemOwnerName = safeStr(item.ownerName);
                   const itemOwnerAvatar = safeStr(item.ownerAvatar);
                   const itemPrice = safeNum(item.requiredBalance);
-                  const oldPrice = (itemPrice * 1.2).toFixed(0);
+                  const isOwner = item.ownerId === currentUser.id;
 
                   return (
                     <div 
@@ -139,9 +184,21 @@ export const SwapList: React.FC = () => {
                           
                           <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
   
-                          <div className="absolute bottom-2 left-2 bg-[#FF80AB] px-2 py-1 rounded-lg shadow-sm">
-                             <span className="text-[8px] font-black text-white uppercase tracking-wide">YENİ GİBİ</span>
-                          </div>
+                          {/* Delete Button for Owner */}
+                          {isOwner && (
+                              <button 
+                                onClick={(e) => handleDelete(e, itemId)}
+                                className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-lg shadow-sm hover:bg-red-600 transition-colors z-20"
+                              >
+                                  <Trash2 size={12} />
+                              </button>
+                          )}
+
+                          {!isOwner && (
+                            <div className="absolute bottom-2 left-2 bg-[#FF80AB] px-2 py-1 rounded-lg shadow-sm">
+                                <span className="text-[8px] font-black text-white uppercase tracking-wide">YENİ GİBİ</span>
+                            </div>
+                          )}
                        </div>
   
                        <div className="px-1 space-y-1 flex-1 flex flex-col">
@@ -154,18 +211,19 @@ export const SwapList: React.FC = () => {
                           <div className="flex items-center gap-1.5 py-1">
                              <img src={itemOwnerAvatar} alt={itemOwnerName} className="w-4 h-4 rounded-full border border-gray-100" />
                              <span className="text-[9px] text-gray-400 font-medium truncate max-w-[80px]">
-                               {itemOwnerName}
+                               {isOwner ? 'Siz' : itemOwnerName}
                              </span>
                           </div>
   
                           <div className="flex items-center justify-between pt-1 border-t border-gray-50 mt-auto">
                              <div className="flex flex-col">
-                                <span className="text-[9px] text-gray-400 font-medium line-through">{oldPrice} ₺</span>
                                 <span className="text-sm font-black text-slate-900">{itemPrice} ₺</span>
                              </div>
-                             <button className="w-7 h-7 bg-slate-900 rounded-full flex items-center justify-center text-white shadow-md shadow-slate-900/20 group-hover:scale-110 transition-transform">
-                                <Plus size={14} />
-                             </button>
+                             {!isOwner && (
+                                <button className="w-7 h-7 bg-slate-900 rounded-full flex items-center justify-center text-white shadow-md shadow-slate-900/20 group-hover:scale-110 transition-transform">
+                                    <Plus size={14} />
+                                </button>
+                             )}
                           </div>
                        </div>
                     </div>
