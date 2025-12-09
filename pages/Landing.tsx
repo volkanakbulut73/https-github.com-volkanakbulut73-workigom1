@@ -33,7 +33,7 @@ export const Landing: React.FC = () => {
               </h1>
               
               <p className="text-slate-300 text-lg md:text-xl leading-relaxed max-w-lg">
-                Kullanmadığın yemek kartı bakiyelerini toplulukla paylaş veya %20'ye varan indirimlerle yemek ye. Güvenli, hızlı ve kolay.
+                Kullanmadığın yemek kartı bakiyelerini toplulukla paylaş. Paylaşım Bul veya Destekçi Ol - İki seçenek, bir amaç: <span className="text-white font-bold">Toplumsal Dayanışma! 💚</span>
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 pt-4">

@@ -62,7 +62,7 @@ export const Home: React.FC = () => {
          <div className="absolute top-[-20%] right-[-10%] w-48 h-48 bg-white/5 rounded-full blur-3xl pointer-events-none"></div>
          <div className="absolute bottom-[-10%] left-[-10%] w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
 
-         <div className="relative z-10 flex justify-between items-center">
+         <div className="relative z-10 flex justify-between items-start">
              <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/profile')}>
                 <div className="relative">
                    <img src={safeAvatar} alt={safeName} className="w-9 h-9 md:w-12 md:h-12 rounded-full object-cover border border-white/20" />
@@ -71,6 +71,10 @@ export const Home: React.FC = () => {
                 <div>
                    <p className="text-slate-400 text-[9px] md:text-xs font-bold uppercase tracking-wider leading-none mb-0.5">{greeting}</p>
                    <h1 className="font-bold text-sm md:text-xl leading-none">{safeName}</h1>
+                   <div className="bg-white/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1.5 mt-2 backdrop-blur-sm border border-white/5">
+                      <Heart size={10} className="text-emerald-400 fill-emerald-400" />
+                      <span className="text-[9px] md:text-[10px] font-bold text-emerald-100">Sosyal Dayanışma Platformu</span>
+                   </div>
                 </div>
              </div>
 
