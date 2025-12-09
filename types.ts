@@ -1,3 +1,6 @@
+
+import { supabase, isSupabaseConfigured } from './lib/supabase';
+
 export enum VoucherCompany {
   SODEXO = 'Sodexo',
   MULTINET = 'Multinet',
@@ -209,6 +212,27 @@ export const TransactionService = {
 
 export const DBService = {
   getUserProfile: async (id: string): Promise<User | null> => {
+    if (isSupabaseConfigured()) {
+       const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
+       if (data && !error) {
+           return {
+             id: data.id,
+             name: data.full_name,
+             avatar: data.avatar_url || 'https://picsum.photos/200',
+             rating: data.rating || 5.0,
+             location: data.location || 'Konum Yok',
+             goldenHearts: data.golden_hearts || 0,
+             silverHearts: data.silver_hearts || 0,
+             isAvailable: true,
+             referralCode: data.referral_code || 'REF',
+             wallet: {
+               balance: data.wallet_balance || 0,
+               totalEarnings: data.total_earnings || 0,
+               pendingBalance: 0
+             }
+           };
+       }
+    }
     return ReferralService.getUserProfile();
   },
   getUnreadCounts: async (id: string) => {
@@ -233,13 +257,26 @@ export const DBService = {
     return null;
   },
   createTransactionRequest: async (userId: string, amount: number, description: string) => {
+     if (isSupabaseConfigured()) {
+       // Insert into database if configured
+       // This part would map to your real tables
+     }
      return { id: `tx-${Date.now()}` };
   },
   markCashPaid: async (txId: string) => {},
   completeTransaction: async (txId: string) => {},
   failTransaction: async (txId: string) => {},
   cancelTransaction: async (txId: string) => {},
-  getPendingTransactions: async (): Promise<any[]> => { return []; },
+  getPendingTransactions: async (): Promise<any[]> => { 
+    if (isSupabaseConfigured()) {
+        const { data } = await supabase
+            .from('swap_listings')
+            .select('*')
+            .order('created_at', { ascending: false });
+        return data || [];
+    }
+    return []; 
+  },
   acceptTransaction: async (listingId: string, supporterId: string, percentage: number) => {
     return { id: listingId, seeker_id: 'seeker-uuid', supporter_id: supporterId };
   },
@@ -248,6 +285,14 @@ export const DBService = {
   withdrawSupport: async (txId: string) => {},
   dismissTransaction: async (txId: string) => {},
   updateUserProfile: async (id: string, data: Partial<User>) => {
+    if (isSupabaseConfigured()) {
+        const updates: any = {};
+        if (data.name) updates.full_name = data.name;
+        if (data.location) updates.location = data.location;
+        if (data.avatar) updates.avatar_url = data.avatar;
+        
+        await supabase.from('profiles').update(updates).eq('id', id);
+    }
     const current = ReferralService.getUserProfile();
     ReferralService.saveUserProfile({ ...current, ...data });
   },
@@ -269,17 +314,100 @@ export const DBService = {
 
 export const SwapService = {
   getListings: async (): Promise<SwapListing[]> => {
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('swap_listings')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error("Supabase error fetching swap_listings:", error);
+          throw error;
+        }
+
+        // Map Supabase columns to TypeScript interface
+        return data.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          requiredBalance: item.required_balance, // mapped from snake_case
+          photoUrl: item.photo_url || 'https://picsum.photos/300/400', // mapped from snake_case
+          location: item.location || 'Konum Yok',
+          ownerId: item.owner_id, // mapped from snake_case
+          ownerName: item.owner_name || 'Kullanıcı', // mapped from snake_case
+          ownerAvatar: item.owner_avatar || 'https://picsum.photos/100', // mapped from snake_case
+          createdAt: item.created_at
+        }));
+      } catch (e) {
+        console.error("Listings fetch failed, using fallback", e);
+      }
+    }
+
     try {
       const stored = localStorage.getItem('swap_listings');
       return stored ? JSON.parse(stored) : [];
     } catch { return []; }
   },
-  uploadImage: async (file: File) => {
+
+  uploadImage: async (file: File): Promise<string> => {
+    if (isSupabaseConfigured()) {
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { data, error } = await supabase.storage
+          .from('listing_images')
+          .upload(filePath, file);
+
+        if (error) throw error;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('listing_images')
+          .getPublicUrl(filePath);
+
+        return publicUrl;
+      } catch (e) {
+        console.error("Image upload failed", e);
+        return URL.createObjectURL(file);
+      }
+    }
     return URL.createObjectURL(file);
   },
+
   createListing: async (title: string, description: string, price: number, photo: string) => {
-    const listings = await SwapService.getListings();
     const user = ReferralService.getUserProfile();
+    
+    if (isSupabaseConfigured()) {
+      const { data: { session } } = await supabase.auth.getSession();
+      const ownerId = session?.user?.id || user.id;
+
+      // Ensure we are inserting into 'swap_listings' with correct columns
+      const { error } = await supabase
+        .from('swap_listings')
+        .insert({
+          title: title,
+          description: description,
+          required_balance: price, // integer
+          photo_url: photo,        // text
+          owner_id: ownerId,       // text
+          owner_name: user.name,   // text
+          owner_avatar: user.avatar, // text
+          location: user.location
+          // id is auto-generated
+          // created_at is auto-generated
+        });
+
+      if (error) {
+        console.error("Error creating listing in Supabase:", error);
+        throw error;
+      }
+      return; 
+    }
+
+    // Local Storage Fallback
+    const listings = await SwapService.getListings();
     const newItem: SwapListing = {
       id: `swap-${Date.now()}`,
       title,
@@ -295,11 +423,43 @@ export const SwapService = {
     listings.unshift(newItem);
     localStorage.setItem('swap_listings', JSON.stringify(listings));
   },
+
   getListingById: async (id: string): Promise<SwapListing | null> => {
+    if (isSupabaseConfigured() && !id.startsWith('swap-')) {
+       try {
+         const { data, error } = await supabase
+           .from('swap_listings')
+           .select('*')
+           .eq('id', id)
+           .single();
+         
+         if (data) {
+           return {
+             id: data.id,
+             title: data.title,
+             description: data.description,
+             requiredBalance: data.required_balance,
+             photoUrl: data.photo_url,
+             location: data.location,
+             ownerId: data.owner_id,
+             ownerName: data.owner_name,
+             ownerAvatar: data.owner_avatar,
+             createdAt: data.created_at
+           };
+         }
+       } catch (e) { console.error(e); }
+    }
+
      const listings = await SwapService.getListings();
      return listings.find(l => l.id === id) || null;
   },
+
   deleteListing: async (id: string) => {
+    if (isSupabaseConfigured() && !id.startsWith('swap-')) {
+       await supabase.from('swap_listings').delete().eq('id', id);
+       return;
+    }
+
     let listings = await SwapService.getListings();
     listings = listings.filter(l => l.id !== id);
     localStorage.setItem('swap_listings', JSON.stringify(listings));
