@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
@@ -258,7 +259,7 @@ export const Supporters: React.FC = () => {
             <button onClick={() => navigate(-1)} className="w-8 h-8 flex items-center justify-center bg-white/10 rounded-full hover:bg-white/20 transition-colors md:hidden">
                 <ChevronLeft size={16} className="text-white" />
             </button>
-            <h1 className="text-sm font-bold tracking-wide">Destek Talepleri</h1>
+            <h1 className="text-sm font-bold tracking-wide">Paylaşım Talepleri</h1>
          </div>
       </div>
 
@@ -268,7 +269,7 @@ export const Supporters: React.FC = () => {
               Paylaşım Bekleyenler
             </button>
             <button onClick={() => setActiveTab('my-support')} className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${activeTab === 'my-support' ? 'bg-slate-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
-              Desteklerim
+              Paylaşımlarım
             </button>
         </div>
 
@@ -304,7 +305,7 @@ export const Supporters: React.FC = () => {
                            <span className="text-[9px] text-gray-400">• {listing.time}</span>
                         </div>
                      </div>
-                     <button className="bg-slate-900 text-white text-[10px] font-bold px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors">Destek</button>
+                     <button className="bg-slate-900 text-white text-[10px] font-bold px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors">Paylaş</button>
                    </div>
                  ))
               )}
@@ -317,7 +318,7 @@ export const Supporters: React.FC = () => {
              {!activeTransaction ? (
                <div className="text-center py-8 bg-white rounded-xl border border-gray-100">
                  <Heart size={24} className="mx-auto text-gray-300 mb-2"/>
-                 <p className="text-[10px] text-gray-400">Aktif destek işleminiz bulunmuyor.</p>
+                 <p className="text-[10px] text-gray-400">Aktif paylaşım işleminiz bulunmuyor.</p>
                </div>
              ) : (
                 <>

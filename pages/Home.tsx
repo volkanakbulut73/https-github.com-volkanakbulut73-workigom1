@@ -130,7 +130,7 @@ export const Home: React.FC = () => {
                 </h3>
                 
                 <p className="text-white/90 text-sm font-medium max-w-[80%] leading-relaxed drop-shadow-sm">
-                   Arkadaşının yaptığı her işlemden bir yıl boyunca % 1 nakit ödül kazan.
+                   Arkadaşının yaptığı her işlemden ömür boyu komisyon kazan.
                 </p>
 
                 <div className="mt-6 flex items-center gap-2 text-sm font-bold bg-white text-purple-700 px-5 py-3 rounded-xl inline-flex shadow-lg shadow-black/10 hover:bg-gray-50 transition-colors">
@@ -188,7 +188,7 @@ export const Home: React.FC = () => {
              <div className="bg-white rounded-[1.5rem] p-2 shadow-sm border border-slate-100 grid grid-cols-3 divide-x divide-gray-50">
                  <button onClick={() => navigate('/supporters')} className="flex flex-col items-center gap-1 py-2 hover:bg-gray-50 rounded-xl transition-colors">
                      <Heart size={20} className="text-emerald-500" />
-                     <span className="text-[10px] font-bold text-slate-600">Destekler</span>
+                     <span className="text-[10px] font-bold text-slate-600">Talepler</span>
                  </button>
                  <button onClick={() => navigate('/swap/create')} className="flex flex-col items-center gap-1 py-2 hover:bg-gray-50 rounded-xl transition-colors">
                      <Plus size={20} className="text-indigo-500" />

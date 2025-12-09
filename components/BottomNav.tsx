@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Plus, Heart, User, ArrowLeftRight } from 'lucide-react';
@@ -33,7 +34,7 @@ export const BottomNav: React.FC = () => {
     // Added md:hidden to hide on desktop
     <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-100 pb-safe z-50 h-[60px] flex items-center shadow-[0_-4px_20px_rgba(0,0,0,0.02)] md:hidden">
       <NavItem to="/app" icon={Home} label="Ana Sayfa" active={isActive('/app')} />
-      <NavItem to="/supporters" icon={Heart} label="Destek" active={isActive('/supporters')} />
+      <NavItem to="/supporters" icon={Heart} label="Talepler" active={isActive('/supporters')} />
 
       <div className="relative -top-6 mx-1">
         <Link to="/find-share">

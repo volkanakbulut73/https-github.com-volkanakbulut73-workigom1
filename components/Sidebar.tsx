@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Home, Heart, ArrowLeftRight, User, MessageCircle, LogOut, Plus, Wallet } from 'lucide-react';
@@ -42,7 +43,7 @@ export const Sidebar: React.FC = () => {
 
         <nav className="space-y-2">
           <NavItem to="/app" icon={Home} label="Ana Sayfa" />
-          <NavItem to="/supporters" icon={Heart} label="Destek Talepleri" />
+          <NavItem to="/supporters" icon={Heart} label="Paylaşım Talepleri" />
           <NavItem to="/swap" icon={ArrowLeftRight} label="Takas Pazarı" />
           <NavItem to="/messages" icon={MessageCircle} label="Mesajlar" />
           <NavItem to="/profile" icon={User} label="Profil" />
