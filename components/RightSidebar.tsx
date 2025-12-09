@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TransactionService, Transaction, TrackerStep } from '../types';
@@ -64,17 +65,6 @@ export const RightSidebar: React.FC = () => {
              <p className="text-xs text-gray-400 font-medium">Aktif işleminiz yok.</p>
           </div>
         )}
-      </div>
-
-      {/* Promo Widget */}
-      <div className="bg-gradient-to-br from-purple-600 to-indigo-600 rounded-2xl p-5 text-white shadow-lg shadow-purple-500/20 mb-6 relative overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate('/invite')}>
-         <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
-         <div className="relative z-10">
-            <Gift size={24} className="mb-3" />
-            <h4 className="font-bold text-lg leading-tight mb-1">Arkadaşını Davet Et</h4>
-            <p className="text-xs text-purple-100 mb-3 opacity-90">%1 Komisyon kazan.</p>
-            <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded-lg backdrop-blur-sm">Kodu Paylaş</span>
-         </div>
       </div>
 
       {/* Safety Info */}

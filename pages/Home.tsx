@@ -144,65 +144,6 @@ export const Home: React.FC = () => {
              </div>
          </div>
 
-         {/* Main Actions - "Paylaş" & "Tasarruf Et" */}
-         <div className="grid grid-cols-2 gap-4">
-            {/* Tasarruf Et (Yemek Ye) */}
-            <button 
-               onClick={() => navigate('/find-share')}
-               className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col justify-between h-48 group hover:shadow-xl hover:shadow-orange-500/10 transition-all active:scale-[0.98]"
-            >
-               <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300 shadow-sm">
-                  <Utensils size={28} strokeWidth={2.5} />
-               </div>
-               <div className="text-left">
-                  <h3 className="text-slate-900 font-black text-xl leading-none mb-2">Tasarruf<br/>Et</h3>
-                  <div className="flex items-center gap-1 text-gray-400 text-xs font-bold">
-                     <span>İndirimli Ye</span> <ChevronRight size={12} />
-                  </div>
-               </div>
-            </button>
-
-            {/* Paylaş (Takas Yap) */}
-            <button 
-               onClick={() => navigate('/swap')}
-               className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col justify-between h-48 group hover:shadow-xl hover:shadow-blue-500/10 transition-all active:scale-[0.98]"
-            >
-               <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300 shadow-sm">
-                  <ArrowLeftRight size={28} strokeWidth={2.5} />
-               </div>
-               <div className="text-left">
-                  <h3 className="text-slate-900 font-black text-xl leading-none mb-2">Paylaş</h3>
-                  <div className="flex items-center gap-1 text-gray-400 text-xs font-bold">
-                     <span>Bakiye Sat</span> <ChevronRight size={12} />
-                  </div>
-               </div>
-            </button>
-         </div>
-
-         {/* Quick Links / Secondary */}
-         <div className="pt-2">
-             <div className="flex items-center justify-between mb-3 px-1">
-                <h3 className="font-bold text-slate-800 text-sm">Hızlı Erişim</h3>
-             </div>
-             
-             <div className="bg-white rounded-[1.5rem] p-2 shadow-sm border border-slate-100 grid grid-cols-3 divide-x divide-gray-50">
-                 <button onClick={() => navigate('/supporters')} className="flex flex-col items-center gap-1 py-2 hover:bg-gray-50 rounded-xl transition-colors">
-                     <Heart size={20} className="text-emerald-500" />
-                     <span className="text-[10px] font-bold text-slate-600">Talepler</span>
-                 </button>
-                 <button onClick={() => navigate('/swap/create')} className="flex flex-col items-center gap-1 py-2 hover:bg-gray-50 rounded-xl transition-colors">
-                     <Plus size={20} className="text-indigo-500" />
-                     <span className="text-[10px] font-bold text-slate-600">İlan Ver</span>
-                 </button>
-                 <button onClick={() => navigate('/profile')} className="flex flex-col items-center gap-1 py-2 hover:bg-gray-50 rounded-xl transition-colors">
-                     <div className="w-5 h-5 rounded-full bg-slate-200 overflow-hidden">
-                        <img src={safeAvatar} className="w-full h-full object-cover" />
-                     </div>
-                     <span className="text-[10px] font-bold text-slate-600">Profilim</span>
-                 </button>
-             </div>
-         </div>
-
       </div>
     </div>
   );
