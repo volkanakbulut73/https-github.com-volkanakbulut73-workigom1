@@ -1,0 +1,130 @@
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ChevronLeft, MapPin, MessageCircle, Wallet, Trash2, Loader2 } from 'lucide-react';
+import { Button } from '../components/Button';
+import { SwapService, SwapListing, ReferralService } from '../types';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+
+export const SwapDetail: React.FC = () => {
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const [listing, setListing] = useState<SwapListing | null>(null);
+  const [loading, setLoading] = useState(true);
+  const currentUser = ReferralService.getUserProfile();
+
+  useEffect(() => {
+    const loadListing = async () => {
+        if (!id) return;
+        setLoading(true);
+        const item = await SwapService.getListingById(id);
+        if (item) setListing(item);
+        else navigate('/swap');
+        setLoading(false);
+    };
+    loadListing();
+  }, [id, navigate]);
+
+  if (loading) {
+     return (
+        <div className="min-h-screen flex items-center justify-center bg-white">
+           <Loader2 className="animate-spin text-slate-900" size={32} />
+        </div>
+     );
+  }
+
+  if (!listing) return null;
+
+  const isOwner = listing.ownerId === currentUser.id;
+
+  const handleDelete = async () => {
+    if(window.confirm('Bu ilanı silmek istediğinize emin misiniz?')) {
+        await SwapService.deleteListing(listing.id);
+        navigate('/swap');
+    }
+  };
+
+  const handleMessage = async () => {
+    if (isSupabaseConfigured()) {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+    }
+    navigate(`/messages/${listing.ownerId}`);
+  };
+
+  return (
+    <div className="pb-24 min-h-screen bg-white">
+      <div className="relative h-72 bg-gray-900 overflow-hidden w-full">
+        <img 
+            src={listing.photoUrl} 
+            alt={listing.title} 
+            className="absolute inset-0 w-full h-full object-contain" 
+        />
+        
+        <div className="absolute top-0 left-0 w-full p-6 pt-8 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent z-10">
+            <button onClick={() => navigate(-1)} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30">
+                <ChevronLeft size={20} />
+            </button>
+            {isOwner && (
+                <button onClick={handleDelete} className="p-2 bg-red-500/80 backdrop-blur-md rounded-full text-white hover:bg-red-600">
+                    <Trash2 size={18} />
+                </button>
+            )}
+        </div>
+      </div>
+
+      <div className="-mt-6 relative bg-white rounded-t-[2rem] px-6 pt-8 space-y-6 z-20 shadow-[-10px_0_20px_rgba(0,0,0,0.1)]">
+         
+         <div className="flex justify-between items-start">
+            <div className="flex-1 pr-4">
+                <h1 className="text-2xl font-bold text-gray-800 leading-tight mb-2 break-words">{listing.title}</h1>
+                <div className="flex items-center text-sm text-gray-500 gap-1">
+                    <MapPin size={14} className="text-primary" /> {listing.location}
+                </div>
+            </div>
+            <div className="text-right shrink-0">
+                <span className="block text-2xl font-black text-slate-900">{listing.requiredBalance} ₺</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase">Yemek Kartı</span>
+            </div>
+         </div>
+
+         <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-2xl">
+            <img src={listing.ownerAvatar} alt={listing.ownerName} className="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover" />
+            <div className="flex-1">
+                <p className="text-sm font-bold text-gray-800">{listing.ownerName}</p>
+                <p className="text-xs text-gray-500">İlan Sahibi</p>
+            </div>
+            {!isOwner && (
+                <button 
+                    onClick={handleMessage}
+                    className="bg-white p-2 rounded-full shadow-sm text-slate-900 hover:bg-slate-900 hover:text-white transition-colors"
+                >
+                    <MessageCircle size={20} />
+                </button>
+            )}
+         </div>
+
+         <div className="space-y-2 pb-10">
+            <h3 className="font-bold text-gray-800">Açıklama</h3>
+            <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap break-words">
+                {listing.description || 'Açıklama belirtilmemiş.'}
+            </p>
+         </div>
+
+         <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 z-40 pb-safe">
+            {isOwner ? (
+                <Button fullWidth variant="secondary" disabled>Kendi İlanın</Button>
+            ) : (
+                <Button fullWidth onClick={handleMessage}>
+                    <Wallet className="mr-2" size={18} /> Takas Teklif Et
+                </Button>
+            )}
+         </div>
+
+      </div>
+    </div>
+  );
+};
