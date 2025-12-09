@@ -48,18 +48,25 @@ export const Supporters: React.FC = () => {
   }, []);
 
   const fetchData = async () => {
-    if (listings.length === 0) setLoading(true);
+    // Removed the line that forces loading=true if listings appear empty due to closure capture.
+    // This prevents the UI from flickering every 5 seconds.
 
     if (!isSupabaseConfigured()) {
-       if (listings.length === 0) {
-           const mockListings: UIListing[] = [
-              { id: '1', name: 'Ahmet Y.', amount: 1000, location: 'Kadıköy', time: '5 dk', rating: 4.8, avatar: 'https://picsum.photos/100/100', description: 'Öğle yemeği için yardım lazım', type: 'food' },
-              { id: '2', name: 'Zeynep K.', amount: 1200, location: 'Beşiktaş', time: '12 dk', rating: 5.0, avatar: 'https://picsum.photos/101/101', description: 'Migros alışverişi', type: 'market' },
-              { id: '3', name: 'Can B.', amount: 80, location: 'Şişli', time: '20 dk', rating: 4.5, avatar: 'https://picsum.photos/102/102', description: 'Kahve dünyası', type: 'food' },
-              { id: '4', name: 'Elif S.', amount: 450, location: 'Ataşehir', time: '30 dk', rating: 4.9, avatar: 'https://picsum.photos/103/103', description: 'Burger King', type: 'food' },
-           ];
-           setListings(mockListings);
-       }
+       // Check if we need to populate mock data. 
+       // We use a functional update to check the *current* state to avoid closure staleness issues
+       setListings(currentListings => {
+           if (currentListings.length === 0) {
+               const mockListings: UIListing[] = [
+                  { id: '1', name: 'Ahmet Y.', amount: 1000, location: 'Kadıköy', time: '5 dk', rating: 4.8, avatar: 'https://picsum.photos/100/100', description: 'Öğle yemeği için yardım lazım', type: 'food' },
+                  { id: '2', name: 'Zeynep K.', amount: 1200, location: 'Beşiktaş', time: '12 dk', rating: 5.0, avatar: 'https://picsum.photos/101/101', description: 'Migros alışverişi', type: 'market' },
+                  { id: '3', name: 'Can B.', amount: 80, location: 'Şişli', time: '20 dk', rating: 4.5, avatar: 'https://picsum.photos/102/102', description: 'Kahve dünyası', type: 'food' },
+                  { id: '4', name: 'Elif S.', amount: 450, location: 'Ataşehir', time: '30 dk', rating: 4.9, avatar: 'https://picsum.photos/103/103', description: 'Burger King', type: 'food' },
+               ];
+               return mockListings;
+           }
+           return currentListings;
+       });
+
        const current = TransactionService.getActive();
        setActiveTransaction(current || null);
        setLoading(false);

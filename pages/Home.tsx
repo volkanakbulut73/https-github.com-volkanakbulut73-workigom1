@@ -126,11 +126,11 @@ export const Home: React.FC = () => {
                 
                 <h3 className="text-2xl font-black leading-tight mb-2 drop-shadow-sm">
                    Arkadaşını Getir,<br/>
-                   <span className="text-yellow-300">%1 Nakit Kazan!</span>
+                   <span className="text-yellow-300">%1 Nakit ödül  Kazan!</span>
                 </h3>
                 
                 <p className="text-white/90 text-sm font-medium max-w-[80%] leading-relaxed drop-shadow-sm">
-                   Arkadaşının yaptığı her işlemden ömür boyu komisyon kazan.
+                   Arkadaşının yaptığı her işlemden bir yıl boyunca % 1 ödül kazan.
                 </p>
 
                 <div className="mt-6 flex items-center gap-2 text-sm font-bold bg-white text-purple-700 px-5 py-3 rounded-xl inline-flex shadow-lg shadow-black/10 hover:bg-gray-50 transition-colors">
