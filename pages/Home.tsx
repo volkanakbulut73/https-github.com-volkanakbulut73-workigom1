@@ -101,35 +101,45 @@ export const Home: React.FC = () => {
             </div>
          </div>
 
-         {/* Invite Banner - FOCUS AREA */}
+         {/* Invite Banner - FOCUS AREA - WITH BACKGROUND IMAGE */}
          <div 
             onClick={() => navigate('/invite')}
-            className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-[2.5rem] p-8 text-white shadow-lg shadow-purple-500/30 relative overflow-hidden cursor-pointer group transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="relative rounded-[2.5rem] p-8 text-white shadow-lg shadow-purple-500/30 overflow-hidden cursor-pointer group transition-all hover:scale-[1.02] active:scale-[0.98]"
          >
-             <div className="absolute top-0 right-0 w-40 h-40 bg-white/20 rounded-full blur-3xl -mr-10 -mt-10 group-hover:scale-110 transition-transform duration-700"></div>
+             {/* Background Image Layer */}
+             <div className="absolute inset-0 z-0">
+                <img 
+                  src="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" 
+                  alt="Friends" 
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                />
+                {/* Gradient Overlay for Text Readability */}
+                <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/95 via-purple-900/80 to-purple-500/40 mix-blend-multiply"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-60"></div>
+             </div>
              
              <div className="relative z-10">
-                <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full mb-3 border border-white/20">
+                <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full mb-3 border border-white/20 shadow-sm">
                     <Gift size={12} className="text-white" />
                     <span className="text-[10px] font-bold uppercase tracking-wide">Özel Fırsat</span>
                 </div>
                 
-                <h3 className="text-2xl font-black leading-tight mb-2">
+                <h3 className="text-2xl font-black leading-tight mb-2 drop-shadow-sm">
                    Arkadaşını Getir,<br/>
                    <span className="text-yellow-300">%1 Nakit Kazan!</span>
                 </h3>
                 
-                <p className="text-white/90 text-sm font-medium max-w-[80%] leading-relaxed">
+                <p className="text-white/90 text-sm font-medium max-w-[80%] leading-relaxed drop-shadow-sm">
                    Arkadaşının yaptığı her işlemden ömür boyu komisyon kazan.
                 </p>
 
-                <div className="mt-6 flex items-center gap-2 text-sm font-bold bg-white text-purple-600 px-5 py-3 rounded-xl inline-flex shadow-sm">
+                <div className="mt-6 flex items-center gap-2 text-sm font-bold bg-white text-purple-700 px-5 py-3 rounded-xl inline-flex shadow-lg shadow-black/10 hover:bg-gray-50 transition-colors">
                    Hemen Davet Et <ChevronRight size={16} />
                 </div>
              </div>
              
-             {/* 3D-like Icon Decor */}
-             <div className="absolute -bottom-6 -right-6 text-white/20 rotate-12 transform group-hover:rotate-0 transition-transform duration-500">
+             {/* Decorative Element */}
+             <div className="absolute -bottom-6 -right-6 text-white/10 rotate-12 transform group-hover:rotate-0 transition-transform duration-500 z-0">
                 <Gift size={140} />
              </div>
          </div>
