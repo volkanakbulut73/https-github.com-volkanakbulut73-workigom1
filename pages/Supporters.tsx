@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
-import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet, Info } from 'lucide-react';
+import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet, Info, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TrackerStep, Transaction, TransactionService, calculateTransaction, DBService, formatName } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -94,12 +94,13 @@ export const Supporters: React.FC = () => {
         setListings(mappedListings);
 
         if (user) {
+           // This now includes 'completed' transactions that haven't been dismissed
            const activeTx = await DBService.getActiveTransaction(user.id);
            
            if (activeTx && activeTx.supporterId === user.id) {
                setActiveTransaction(activeTx);
               
-              if (activeTab === 'all' && activeTx.status !== TrackerStep.COMPLETED && activeTx.status !== TrackerStep.CANCELLED && activeTx.status !== TrackerStep.FAILED) {
+              if (activeTab === 'all' && activeTx.status !== TrackerStep.DISMISSED && activeTx.status !== TrackerStep.CANCELLED) {
                   setActiveTab('my-support');
               }
            } else {
@@ -114,7 +115,7 @@ export const Supporters: React.FC = () => {
 
   const handleSupportClick = (e: React.MouseEvent, listing: UIListing) => {
     e.stopPropagation();
-    if (activeTransaction && activeTransaction.status !== TrackerStep.COMPLETED && activeTransaction.status !== TrackerStep.CANCELLED && activeTransaction.status !== TrackerStep.FAILED) {
+    if (activeTransaction && activeTransaction.status !== TrackerStep.COMPLETED && activeTransaction.status !== TrackerStep.DISMISSED && activeTransaction.status !== TrackerStep.CANCELLED && activeTransaction.status !== TrackerStep.FAILED) {
       alert("Devam eden bir işleminiz var.");
       setActiveTab('my-support');
       return;
@@ -247,13 +248,14 @@ export const Supporters: React.FC = () => {
     }
   };
 
-  const handleClearActive = async () => {
+  const handleDismissTransaction = async () => {
     if (activeTransaction && isSupabaseConfigured()) {
         await DBService.dismissTransaction(activeTransaction.id);
     }
     setActiveTransaction(null);
     TransactionService.clearActive();
-    navigate('/');
+    setActiveTab('all');
+    navigate('/supporters');
   };
 
   // Helper for UI calculations
@@ -359,7 +361,7 @@ export const Supporters: React.FC = () => {
                             <XCircle size={32} className="text-red-500" />
                         </div>
                         <h2 className="text-sm font-bold text-gray-800 mb-2">İşlem İptal Edildi</h2>
-                        <Button fullWidth onClick={handleClearActive} className="bg-gray-800 hover:bg-gray-900 text-xs">
+                        <Button fullWidth onClick={handleDismissTransaction} className="bg-gray-800 hover:bg-gray-900 text-xs">
                             <Home size={14} className="mr-2" /> Ana Sayfaya Dön
                         </Button>
                     </div>
@@ -369,8 +371,26 @@ export const Supporters: React.FC = () => {
                             <XCircle size={32} className="text-red-500" />
                         </div>
                         <h2 className="text-sm font-bold text-gray-800 mb-2">Ödeme Başarısız</h2>
-                        <Button fullWidth onClick={handleClearActive} className="bg-gray-800 hover:bg-gray-900 text-xs">
+                        <Button fullWidth onClick={handleDismissTransaction} className="bg-gray-800 hover:bg-gray-900 text-xs">
                             <Home size={14} className="mr-2" /> Listeye Dön
+                        </Button>
+                    </div>
+                ) : activeTransaction.status === TrackerStep.COMPLETED ? (
+                    <div className="bg-white p-8 rounded-[2rem] shadow-lg text-center animate-fade-in border border-emerald-100 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+                        <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce shadow-sm">
+                            <CheckCircle2 size={40} className="text-emerald-500" />
+                        </div>
+                        <h2 className="text-xl font-black text-slate-800 mb-1 tracking-tight">İşlem Başarılı!</h2>
+                        <p className="text-xs text-gray-400 font-medium mb-6">Ödeme ve transfer tamamlandı.</p>
+                        
+                        <div className="bg-emerald-50 rounded-2xl p-5 mb-6 border border-emerald-100">
+                             <p className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider mb-1">Hesabınıza aktarılacak tutar</p>
+                             <p className="text-3xl font-black text-emerald-600">{activeTransaction.amounts.refundToSupporter} ₺</p>
+                        </div>
+
+                        <Button fullWidth onClick={handleDismissTransaction} className="bg-slate-900 hover:bg-slate-800 shadow-slate-200 py-3.5 rounded-xl">
+                            <Home size={16} className="mr-2" /> Ana Sayfaya Dön
                         </Button>
                     </div>
                 ) : (
@@ -445,28 +465,14 @@ export const Supporters: React.FC = () => {
                                 </div>
                             )}
 
-                            {activeTransaction.status === TrackerStep.COMPLETED && (
-                                <div className="bg-emerald-50 p-5 rounded-[2rem] text-center border border-emerald-100">
-                                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-emerald-500">
-                                        <Wallet size={32} />
-                                    </div>
-                                    <h3 className="text-base font-black text-emerald-800 mb-1">İşlem Tamamlandı!</h3>
-                                    <Button fullWidth className="bg-emerald-600 hover:bg-emerald-700 text-white border-none shadow-lg shadow-emerald-200" onClick={handleClearActive}>
-                                        Listeye Dön
-                                    </Button>
-                                </div>
-                            )}
-
-                            {activeTransaction.status !== TrackerStep.COMPLETED && (
-                                <div className="mt-4 pt-2 border-t border-gray-50 text-center">
-                                    <button 
-                                        onClick={handleCancelTransaction}
-                                        className="text-red-300 text-[10px] font-bold py-1 px-3 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors"
-                                    >
-                                        İşlemi İptal Et
-                                    </button>
-                                </div>
-                            )}
+                            <div className="mt-4 pt-2 border-t border-gray-50 text-center">
+                                <button 
+                                    onClick={handleCancelTransaction}
+                                    className="text-red-300 text-[10px] font-bold py-1 px-3 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors"
+                                >
+                                    İşlemi İptal Et
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}

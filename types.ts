@@ -31,6 +31,7 @@ export enum TrackerStep {
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
   FAILED = 'failed',
+  DISMISSED = 'dismissed', // Added for archival
   // UI helper states (not in DB)
   SUPPORT_CONFIRMED = 'support-confirmed', 
   PAYMENT_CONFIRMED = 'payment-confirmed',
@@ -250,7 +251,9 @@ export const DBService = {
                 supporter:supporter_id(full_name)
             `)
             .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
-            .neq('status', 'completed')
+            // We NO LONGER filter out 'completed'. We only filter 'dismissed' and 'cancelled'.
+            // This ensures the "Success Screen" stays visible until dismissed.
+            .neq('status', 'dismissed')
             .neq('status', 'cancelled')
             .neq('status', 'failed')
             .order('created_at', { ascending: false })
@@ -288,7 +291,7 @@ export const DBService = {
                 amount: amount,
                 listing_title: description,
                 status: 'waiting-supporter',
-                support_percentage: 20 // Default initially, can be changed by supporter selection logic if implemented
+                support_percentage: 20 // Default initially
             })
             .select()
             .single();
@@ -329,7 +332,7 @@ export const DBService = {
         if (error) throw error;
         return data;
     }
-    return { id: txId, seeker_id: 'seeker-uuid' };
+    return { id: txId, seeker_id: 'seeker-uuid', amount: 0, listing_title: '', created_at: '', support_percentage: percentage, status: 'waiting-cash-payment' };
   },
 
   markCashPaid: async (txId: string) => {
@@ -390,7 +393,6 @@ export const DBService = {
   },
 
   withdrawSupport: async (txId: string) => {
-      // Revert transaction to waiting-supporter
       if (isSupabaseConfigured()) {
           const { error } = await supabase
               .from('transactions')
@@ -405,27 +407,45 @@ export const DBService = {
   },
 
   dismissTransaction: async (txId: string) => {
-     // Local UI dismissal helper, mostly checks if it's final
+      // This sets the status to 'dismissed', effectively archiving it from active view
+      if (isSupabaseConfigured()) {
+          const { error } = await supabase
+              .from('transactions')
+              .update({ status: 'dismissed' })
+              .eq('id', txId);
+          if (error) throw error;
+      }
+      TransactionService.clearActive();
   },
 
   // --- Storage ---
-  uploadQR: async (file: File) => { 
+  uploadQR: async (file: File): Promise<string> => { 
       if (isSupabaseConfigured()) {
-          const fileExt = file.name.split('.').pop();
-          const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-          const filePath = `${fileName}`;
+          try {
+              const fileExt = file.name.split('.').pop();
+              const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+              const filePath = `${fileName}`;
 
-          const { error: uploadError } = await supabase.storage
-            .from('qr-codes')
-            .upload(filePath, file);
+              const { error: uploadError } = await supabase.storage
+                .from('qr-codes')
+                .upload(filePath, file);
 
-          if (uploadError) throw uploadError;
+              if (uploadError) throw uploadError;
 
-          const { data: { publicUrl } } = supabase.storage
-            .from('qr-codes')
-            .getPublicUrl(filePath);
+              const { data: { publicUrl } } = supabase.storage
+                .from('qr-codes')
+                .getPublicUrl(filePath);
 
-          return publicUrl;
+              return publicUrl;
+          } catch (error) {
+              console.warn("Supabase Storage upload failed, falling back to base64", error);
+              // Fallback to base64 if storage is not configured or fails
+              return new Promise((resolve) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result as string);
+                  reader.readAsDataURL(file);
+              });
+          }
       }
       return URL.createObjectURL(file); 
   },
@@ -463,7 +483,6 @@ export const DBService = {
 export const SwapService = {
   // Existing SwapService code remains for Swap Market features
   getListings: async (): Promise<SwapListing[]> => {
-      // ... existing implementation
       return [];
   },
   uploadImage: async (file: File): Promise<string> => { return URL.createObjectURL(file); },
