@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DBService } from '../types';
@@ -99,12 +100,7 @@ export const Messages: React.FC = () => {
                    <p className="text-xs">Yükleniyor...</p>
                 </div>
              ) : filteredInbox.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                   <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
-                      <MessageSquareOff size={24} className="opacity-40" />
-                   </div>
-                   <p className="font-bold text-gray-500 text-sm">Mesajınız yok</p>
-                </div>
+                null
              ) : (
                 filteredInbox.map(chat => (
                    <div 
@@ -136,14 +132,7 @@ export const Messages: React.FC = () => {
       <div className={`flex-1 bg-gray-50 h-full ${!userId && !isDesktop ? 'hidden' : 'block'}`}>
          {userId ? (
             <ChatDetail overrideUserId={userId} isSplitView={isDesktop} />
-         ) : (
-            <div className="h-full flex items-center justify-center bg-gray-50 text-gray-400 flex-col">
-               <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mb-4">
-                  <MessageSquareOff size={32} className="opacity-40" />
-               </div>
-               <p className="text-sm font-medium">Görüntülemek için bir sohbet seçin</p>
-            </div>
-         )}
+         ) : null}
       </div>
 
     </div>
