@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
-import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet } from 'lucide-react';
+import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TrackerStep, Transaction, TransactionService, calculateTransaction, DBService, formatName } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -32,8 +32,12 @@ export const Supporters: React.FC = () => {
   const [listings, setListings] = useState<UIListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTransaction, setActiveTransaction] = useState<Transaction | null>(null);
+  
+  // Modal States
   const [selectedListing, setSelectedListing] = useState<UIListing | null>(null);
   const [showSelectionModal, setShowSelectionModal] = useState(false);
+  const [selectedPercentage, setSelectedPercentage] = useState<20 | 100>(20);
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [qrUploading, setQrUploading] = useState(false);
   
@@ -48,12 +52,7 @@ export const Supporters: React.FC = () => {
   }, []);
 
   const fetchData = async () => {
-    // Removed the line that forces loading=true if listings appear empty due to closure capture.
-    // This prevents the UI from flickering every 5 seconds.
-
     if (!isSupabaseConfigured()) {
-       // Check if we need to populate mock data. 
-       // We use a functional update to check the *current* state to avoid closure staleness issues
        setListings(currentListings => {
            if (currentListings.length === 0) {
                const mockListings: UIListing[] = [
@@ -135,13 +134,15 @@ export const Supporters: React.FC = () => {
       return;
     }
     setSelectedListing(listing);
+    setSelectedPercentage(20); // Default to 20
     setShowSelectionModal(true);
   };
 
-  const handleConfirmSupport = async (percentage: 20 | 100) => {
+  const handleConfirmSupport = async () => {
     if (!selectedListing || isProcessing) return;
     setIsProcessing(true);
 
+    const percentage = selectedPercentage;
     const calc = calculateTransaction(selectedListing.amount, percentage);
     
     const mockTx: Transaction = {
@@ -257,6 +258,33 @@ export const Supporters: React.FC = () => {
     setActiveTransaction(null);
     TransactionService.clearActive();
     navigate('/');
+  };
+
+  // Helper for UI calculations
+  const getCalculatedValues = (amount: number, percentage: 20 | 100) => {
+      if (percentage === 100) {
+          return {
+              contribution: amount, // Full amount
+              fee: 0,
+              totalPay: amount,
+              netReceive: 0,
+              beneficiaryPays: 0
+          };
+      }
+      // Logic for 20% Sharing (Trading)
+      const contribution = amount * 0.20; // 20% "contribution" (discount given)
+      const beneficiaryPays = amount * 0.80; // Beneficiary pays 80%
+      const fee = amount * 0.05; // 5% fee on total
+      const totalPay = contribution + fee; // What the supporter "pays" in value/fee
+      const netReceive = beneficiaryPays - fee; // What supporter gets in cash (80% - fee)
+
+      return {
+          contribution,
+          fee,
+          totalPay,
+          netReceive,
+          beneficiaryPays
+      };
   };
 
   return (
@@ -452,51 +480,124 @@ export const Supporters: React.FC = () => {
       </div>
 
       {showSelectionModal && selectedListing && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center">
-          <div className="bg-white w-full max-w-sm rounded-t-[2rem] sm:rounded-[2rem] p-5 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-[#FFFCF8] w-full max-w-sm rounded-[2rem] p-5 shadow-2xl relative max-h-[90vh] overflow-y-auto animate-fade-in border border-white/20">
             <button 
               onClick={() => { if(!isProcessing) { setShowSelectionModal(false); } }} 
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10"
+              className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 z-10 p-1 hover:bg-gray-100 rounded-full transition-colors"
               disabled={isProcessing}
             >
-              <X size={18} />
+              <X size={20} />
             </button>
             
-            <div className="mb-5 pr-6">
-                <h3 className="text-base font-bold text-slate-900">Paylaşım Seçimi</h3>
-                <p className="text-xs text-slate-500 mt-0.5">{selectedListing.name} için paylaşım oranını seçin</p>
+            <div className="mb-6 pt-1">
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">Paylaşım Seçimi</h3>
+                <p className="text-xs font-medium text-slate-500 mt-1">{selectedListing.name} için paylaşım oranını seçin</p>
             </div>
 
-            <div className="space-y-3">
-                <div className="border border-slate-900/10 rounded-3xl p-4 bg-slate-50">
-                    <div className="flex justify-between items-center text-slate-900 mb-2">
-                        <span className="font-bold text-xs">%20 Paylaşım</span>
-                        <span className="bg-slate-900 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Standart</span>
-                    </div>
-                    <Button 
-                        fullWidth 
-                        onClick={() => handleConfirmSupport(20)} 
-                        disabled={isProcessing}
-                        className="bg-slate-900 hover:bg-slate-800 text-white py-3 rounded-xl"
-                    >
-                        {isProcessing ? <Loader2 size={16} className="animate-spin" /> : 'Seç ve İlerle'}
-                    </Button>
-                </div>
+            <div className="space-y-4">
+                {/* 20% Option */}
+                {(() => {
+                    const values = getCalculatedValues(selectedListing.amount, 20);
+                    const isSelected = selectedPercentage === 20;
+                    return (
+                        <div 
+                            onClick={() => !isProcessing && setSelectedPercentage(20)}
+                            className={`rounded-[1.5rem] p-5 cursor-pointer transition-all duration-200 border relative overflow-hidden group
+                            ${isSelected 
+                                ? 'bg-white border-slate-900 shadow-xl shadow-slate-200 ring-1 ring-slate-900/5' 
+                                : 'bg-white border-gray-200 hover:border-gray-300'}`}
+                        >
+                            <div className="flex justify-between items-center mb-4">
+                                <span className="font-black text-sm text-slate-900">%20 Paylaşım</span>
+                                <span className="bg-slate-900 text-white text-[10px] font-bold px-3 py-1 rounded-full">Standart</span>
+                            </div>
 
-                <div className="border border-yellow-200 rounded-3xl p-4 bg-yellow-50">
-                    <div className="flex justify-between items-center mb-2">
-                        <span className="font-bold text-xs text-yellow-800">%100 Buda Benden 🩷</span>
-                    </div>
-                    <Button 
-                        fullWidth 
-                        onClick={() => handleConfirmSupport(100)} 
-                        disabled={isProcessing}
-                        className="bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-xl border-yellow-400"
-                    >
-                        {isProcessing ? <Loader2 size={16} className="animate-spin" /> : 'Devam Et'}
-                    </Button>
-                </div>
+                            <div className="space-y-2 text-xs text-gray-600 font-medium">
+                                <div className="flex justify-between">
+                                    <span>Senin katkın:</span>
+                                    <span className="font-bold text-slate-900">{values.contribution} ₺</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Platform ücreti: %5</span>
+                                    <span className="font-bold text-slate-900">{values.fee} ₺</span>
+                                </div>
+                                <div className="h-px bg-gray-100 my-2"></div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="font-bold text-slate-700">Toplam ödeyeceğin:</span>
+                                    <span className="font-black text-slate-900">{values.totalPay} ₺</span>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 bg-[#E3F5E6] rounded-xl p-3 text-center border border-[#CAEAD0]">
+                                <p className="text-[#1F542A] text-xs font-bold">Hesabına aktarılacak:</p>
+                                <p className="text-[#1F542A] text-xl font-black">{values.netReceive} ₺</p>
+                                <p className="text-[#3A7E49] text-[9px] font-bold mt-1">Yararlanıcı {values.beneficiaryPays} ₺ ödeyecek</p>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* 100% Option */}
+                {(() => {
+                    const values = getCalculatedValues(selectedListing.amount, 100);
+                    const isSelected = selectedPercentage === 100;
+                    return (
+                        <div 
+                            onClick={() => !isProcessing && setSelectedPercentage(100)}
+                            className={`rounded-[1.5rem] p-5 cursor-pointer transition-all duration-200 border relative overflow-hidden group
+                            ${isSelected 
+                                ? 'bg-white border-yellow-400 shadow-xl shadow-yellow-100 ring-1 ring-yellow-400/20' 
+                                : 'bg-white border-gray-200 hover:border-yellow-200'}`}
+                        >
+                            <div className="flex justify-between items-center mb-4">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="font-black text-sm text-slate-900">%100 Buda Benden</span>
+                                    <Heart size={14} className="text-pink-500 fill-pink-500" />
+                                </div>
+                                <span className="bg-[#FFB703] text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-sm">Altın Kalp</span>
+                            </div>
+
+                            <div className="space-y-2 text-xs text-gray-600 font-medium">
+                                <div className="flex justify-between">
+                                    <span>Senin katkın:</span>
+                                    <span className="font-bold text-slate-900">{values.contribution} ₺</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Platform ücreti:</span>
+                                    <span className="font-bold text-slate-900">%0 - Buda Bizden olsun 😉</span>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 bg-[#FFF9E6] rounded-xl p-3 text-center border border-[#FDE68A]">
+                                <p className="text-[#B45309] text-[10px] font-bold leading-tight mb-2">Yemek ücretinin tamamını ödemeyi kabul ettiniz.</p>
+                                <div className="flex justify-between items-center bg-white/50 rounded-lg px-3 py-1.5">
+                                    <span className="text-[#B45309] text-[10px] font-bold">Hesabınıza aktarılacak tutar:</span>
+                                    <span className="text-[#B45309] font-black text-sm">0 ₺</span>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
             </div>
+
+            <div className="mt-6 flex gap-3">
+                <button 
+                    onClick={() => setShowSelectionModal(false)}
+                    className="flex-1 bg-[#F1F5F9] text-slate-600 font-bold text-sm py-3.5 rounded-2xl hover:bg-gray-200 transition-colors"
+                    disabled={isProcessing}
+                >
+                    iptal
+                </button>
+                <button 
+                    onClick={handleConfirmSupport}
+                    className="flex-[2] bg-[#0F172A] text-white font-bold text-sm py-3.5 rounded-2xl shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+                    disabled={isProcessing}
+                >
+                    {isProcessing ? <Loader2 size={18} className="animate-spin" /> : 'Devam Et'}
+                </button>
+            </div>
+
           </div>
         </div>
       )}
