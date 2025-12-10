@@ -94,7 +94,7 @@ export const Supporters: React.FC = () => {
         setListings(mappedListings);
 
         if (user) {
-           // This now includes 'completed' transactions that haven't been dismissed
+           // Includes completed transactions unless dismissed
            const activeTx = await DBService.getActiveTransaction(user.id);
            
            if (activeTx && activeTx.supporterId === user.id) {

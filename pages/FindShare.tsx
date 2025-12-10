@@ -211,7 +211,11 @@ export const FindShare: React.FC = () => {
     }
   };
 
-  const handleClearActive = () => {
+  const handleClearActive = async () => {
+    // If it was completed/cancelled/failed, we should dismiss it so it doesn't show up again
+    if (activeTransaction && isSupabaseConfigured()) {
+        await DBService.dismissTransaction(activeTransaction.id);
+    }
      TransactionService.clearActive();
      setActiveTransaction(null);
      navigate('/');

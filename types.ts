@@ -251,11 +251,10 @@ export const DBService = {
                 supporter:supporter_id(full_name)
             `)
             .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
-            // We NO LONGER filter out 'completed'. We only filter 'dismissed' and 'cancelled'.
-            // This ensures the "Success Screen" stays visible until dismissed.
+            // Exclude dismissed (archived) and cancelled.
+            // INCLUDES 'completed' so the success screen persists.
             .neq('status', 'dismissed')
             .neq('status', 'cancelled')
-            .neq('status', 'failed')
             .order('created_at', { ascending: false })
             .limit(1)
             .single();
@@ -407,7 +406,7 @@ export const DBService = {
   },
 
   dismissTransaction: async (txId: string) => {
-      // This sets the status to 'dismissed', effectively archiving it from active view
+      // Sets the status to 'dismissed', archiving it from active view
       if (isSupabaseConfigured()) {
           const { error } = await supabase
               .from('transactions')
@@ -438,12 +437,13 @@ export const DBService = {
 
               return publicUrl;
           } catch (error) {
-              console.warn("Supabase Storage upload failed, falling back to base64", error);
-              // Fallback to base64 if storage is not configured or fails
-              return new Promise((resolve) => {
+              console.warn("Supabase Storage error (likely bucket missing), falling back to Base64:", error);
+              // Fallback to base64 to ensure app doesn't crash if storage isn't set up
+              return new Promise((resolve, reject) => {
                   const reader = new FileReader();
-                  reader.onloadend = () => resolve(reader.result as string);
                   reader.readAsDataURL(file);
+                  reader.onload = () => resolve(reader.result as string);
+                  reader.onerror = error => reject(error);
               });
           }
       }
@@ -481,7 +481,6 @@ export const DBService = {
 };
 
 export const SwapService = {
-  // Existing SwapService code remains for Swap Market features
   getListings: async (): Promise<SwapListing[]> => {
       return [];
   },
