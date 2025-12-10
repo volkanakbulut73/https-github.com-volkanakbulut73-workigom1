@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Check, Circle, Loader2 } from 'lucide-react';
 import { TrackerStep } from '../types';
@@ -16,31 +17,29 @@ interface TrackerProps {
 
 export const Tracker: React.FC<TrackerProps> = ({ currentStep, steps }) => {
   const getStepState = (stepId: TrackerStep) => {
+    // Defines the logical progression of steps
     const statusOrder = [
-      TrackerStep.WAITING_SUPPORTER,
-      TrackerStep.SUPPORT_CONFIRMED,
-      TrackerStep.WAITING_CASH_PAYMENT,
-      TrackerStep.CASH_PAID,
-      TrackerStep.WAITING_QR_UPLOAD,
-      TrackerStep.QR_UPLOADED,
-      TrackerStep.WAITING_POS_CONFIRMATION,
-      TrackerStep.PAYMENT_CONFIRMED,
-      TrackerStep.COMPLETED
+      TrackerStep.WAITING_SUPPORTER,      // 'waiting-supporter'
+      TrackerStep.WAITING_CASH_PAYMENT,   // 'waiting-cash-payment'
+      TrackerStep.CASH_PAID,              // 'cash-paid'
+      TrackerStep.QR_UPLOADED,            // 'qr-uploaded'
+      TrackerStep.COMPLETED               // 'completed'
     ];
     
+    // Normalization for visual representation if needed
     let normalizedCurrent = currentStep;
     
-    if (normalizedCurrent !== TrackerStep.WAITING_SUPPORTER && stepId === TrackerStep.WAITING_SUPPORTER) {
-        return 'completed';
-    }
-    
-    if (currentStep === TrackerStep.WAITING_CASH_PAYMENT) normalizedCurrent = TrackerStep.WAITING_CASH_PAYMENT;
-    if (currentStep === TrackerStep.WAITING_QR_UPLOAD) normalizedCurrent = TrackerStep.CASH_PAID;
-    if (currentStep === TrackerStep.WAITING_POS_CONFIRMATION) normalizedCurrent = TrackerStep.QR_UPLOADED;
-
+    // Determine Index
     const currentIndex = statusOrder.indexOf(normalizedCurrent);
     const stepIndex = statusOrder.indexOf(stepId);
     
+    // Handle edge cases where current status might not be in the simple visual flow
+    if (currentIndex === -1) {
+       // If canceled or failed, we might show everything as pending or specific error state
+       // For now, let's treat them as incomplete
+       return 'pending'; 
+    }
+
     if (currentIndex > stepIndex) return 'completed';
     if (currentIndex === stepIndex) return 'active';
     return 'pending';
@@ -86,7 +85,7 @@ export const Tracker: React.FC<TrackerProps> = ({ currentStep, steps }) => {
               
               {state === 'active' && (
                 <div className="mt-2 inline-block bg-slate-100 text-slate-800 text-[10px] font-bold px-2 py-1 rounded animate-bounce">
-                  İşlem Sırası
+                  Şu an buradasınız
                 </div>
               )}
             </div>

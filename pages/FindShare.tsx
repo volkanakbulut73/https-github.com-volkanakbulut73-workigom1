@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Wallet, Clock, Star, Loader2, Info, XCircle, Home, AlertTriangle } from 'lucide-react';
@@ -13,32 +14,74 @@ export const FindShare: React.FC = () => {
   const [activeTransaction, setActiveTransaction] = useState<Transaction | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
 
+  // Initial Load and Realtime Subscription
   useEffect(() => {
-    const loadTransaction = () => {
-      const current = TransactionService.getActive();
-      if (current) {
-        setActiveTransaction(current);
-        if (current.status === TrackerStep.QR_UPLOADED && current.qrUploadedAt) {
-           const elapsed = Math.floor((Date.now() - current.qrUploadedAt) / 1000);
-           const remaining = 300 - elapsed;
-           setTimeLeft(remaining > 0 ? remaining : 0);
+    const init = async () => {
+        let userId = 'current-user';
+        if (isSupabaseConfigured()) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) userId = user.id;
         }
-      } else {
-        setActiveTransaction(null);
+
+        // Fetch initial state
+        const initialTx = await DBService.getActiveTransaction(userId);
+        setActiveTransaction(initialTx);
+        
+        // Setup Supabase Realtime Subscription if we have a transaction
+        if (initialTx && isSupabaseConfigured()) {
+            const channel = supabase.channel(`tx_${initialTx.id}`)
+                .on('postgres_changes', { 
+                    event: 'UPDATE', 
+                    schema: 'public', 
+                    table: 'transactions',
+                    filter: `id=eq.${initialTx.id}`
+                }, (payload) => {
+                    // Map new payload to Transaction interface
+                    const newData = payload.new;
+                    const updatedTx: Transaction = {
+                        ...initialTx,
+                        status: newData.status,
+                        supporterId: newData.supporter_id,
+                        supportPercentage: newData.support_percentage,
+                        qrUrl: newData.qr_url,
+                        qrUploadedAt: newData.qr_uploaded_at,
+                        completedAt: newData.completed_at,
+                        // Update calculated amounts if needed
+                        amounts: calculateTransaction(newData.amount, newData.support_percentage)
+                    };
+                    
+                    // We might need to fetch profile name if supporter joined
+                    if (newData.supporter_id && !initialTx.supporterId) {
+                         DBService.getUserProfile(newData.supporter_id).then(profile => {
+                             if(profile) updatedTx.supporterName = formatName(profile.name);
+                             setActiveTransaction(updatedTx);
+                         });
+                    } else {
+                        setActiveTransaction(updatedTx);
+                    }
+                })
+                .subscribe();
+
+            return () => { supabase.removeChannel(channel); };
+        }
+    };
+    init();
+  }, [activeTransaction?.id]); // Re-subscribe if ID changes (e.g. new creation)
+
+  // Timer logic for QR validity (Mock)
+  useEffect(() => {
+      if (activeTransaction?.status === TrackerStep.QR_UPLOADED && activeTransaction.qrUploadedAt) {
+          const startTime = new Date(activeTransaction.qrUploadedAt).getTime();
+          const interval = setInterval(() => {
+              const elapsed = Math.floor((Date.now() - startTime) / 1000);
+              const remaining = 300 - elapsed;
+              setTimeLeft(remaining > 0 ? remaining : 0);
+          }, 1000);
+          return () => clearInterval(interval);
       }
-    };
-
-    loadTransaction();
-    window.addEventListener('storage', loadTransaction);
-    
-    const localInterval = setInterval(loadTransaction, 1000);
-
-    return () => {
-      window.removeEventListener('storage', loadTransaction);
-      clearInterval(localInterval);
-    };
-  }, []);
+  }, [activeTransaction?.status, activeTransaction?.qrUploadedAt]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -47,7 +90,7 @@ export const FindShare: React.FC = () => {
   };
 
   const handleCreateRequest = async () => {
-    setLoading(true);
+    setCreating(true);
     try {
       let userId = 'current-user';
 
@@ -60,33 +103,34 @@ export const FindShare: React.FC = () => {
           }
           userId = user.id;
       } else {
+          // Fallback demo user
           const profile = ReferralService.getUserProfile();
           userId = profile.id;
       }
 
       const val = parseFloat(amount);
-      if (val < 50 || val > 5000) {
+      if (isNaN(val) || val < 50 || val > 5000) {
          alert("Tutar 50 - 5000 TL arasında olmalıdır.");
-         setLoading(false);
+         setCreating(false);
          return;
       }
 
       const newTxData = await DBService.createTransactionRequest(userId, val, description);
 
+      // Local state update for immediate feedback
       const localTx: Transaction = {
-          id: newTxData?.id || `temp-${Date.now()}`,
-          listingId: newTxData?.id || `temp-${Date.now()}`,
+          id: newTxData.id,
           seekerId: userId,
-          supporterId: '',
-          seekerName: 'Ben',
-          supporterName: '',
+          amount: val,
+          listingTitle: description,
+          status: TrackerStep.WAITING_SUPPORTER,
           supportPercentage: 20,
           amounts: calculateTransaction(val, 20),
-          status: TrackerStep.WAITING_SUPPORTER,
-          createdAt: Date.now()
+          createdAt: new Date().toISOString(),
+          seekerName: 'Ben'
       };
 
-      TransactionService.save(localTx);
+      TransactionService.save(localTx); // Local backup
       setActiveTransaction(localTx);
       setDescription('');
       
@@ -94,7 +138,7 @@ export const FindShare: React.FC = () => {
       console.error(error);
       alert("Talep oluşturulurken bir hata oluştu.");
     } finally {
-      setLoading(false);
+      setCreating(false);
     }
   };
 
@@ -106,8 +150,8 @@ export const FindShare: React.FC = () => {
         if (isSupabaseConfigured()) {
             await DBService.markCashPaid(activeTransaction.id);
         }
+        // Optimistic update
         const updated = { ...activeTransaction, status: TrackerStep.CASH_PAID };
-        TransactionService.save(updated);
         setActiveTransaction(updated);
     } catch (e) {
         console.error("Cash Paid Update Error:", e);
@@ -130,8 +174,7 @@ export const FindShare: React.FC = () => {
         }
     }
 
-    const updated = { ...activeTransaction, status: TrackerStep.COMPLETED, completedAt: Date.now() };
-    TransactionService.save(updated);
+    const updated = { ...activeTransaction, status: TrackerStep.COMPLETED, completedAt: new Date().toISOString() };
     setActiveTransaction(updated);
     ReferralService.processReward(updated);
   };
@@ -141,7 +184,6 @@ export const FindShare: React.FC = () => {
       if (!window.confirm("Ödeme başarısız oldu mu? İşlem sonlandırılacak.")) return;
       
       const updated = { ...activeTransaction, status: TrackerStep.FAILED };
-      TransactionService.save(updated);
       setActiveTransaction(updated);
 
       if (isSupabaseConfigured()) {
@@ -154,11 +196,10 @@ export const FindShare: React.FC = () => {
     if (!window.confirm("İşlemi iptal etmek istediğinize emin misiniz?")) return;
 
     const txId = activeTransaction.id;
-    const previousTx = activeTransaction;
-
-    TransactionService.clearActive();
+    
+    // Optimistic clear
     setActiveTransaction(null);
-    alert("İşlem iptal edildi.");
+    TransactionService.clearActive();
     navigate('/');
 
     try {
@@ -167,7 +208,6 @@ export const FindShare: React.FC = () => {
         }
     } catch (e: any) {
         console.error("Background cancel failed", e);
-        TransactionService.save(previousTx);
     }
   };
 
@@ -234,7 +274,6 @@ export const FindShare: React.FC = () => {
                                     { id: TrackerStep.WAITING_CASH_PAYMENT, label: 'Ödemeniz' },
                                     { id: TrackerStep.CASH_PAID, label: 'QR Hazırlama' },
                                     { id: TrackerStep.QR_UPLOADED, label: 'QR Yüklendi' },
-                                    { id: TrackerStep.PAYMENT_CONFIRMED, label: 'Ödeme Yapıldı' },
                                     { id: TrackerStep.COMPLETED, label: 'Tamamlandı' }
                                     ]}
                                 />
@@ -245,6 +284,7 @@ export const FindShare: React.FC = () => {
                                     </div>
                                     <h3 className="font-bold text-gray-800 text-sm mb-1">Talebiniz Yayınlandı</h3>
                                     <p className="text-xs text-blue-900 font-bold">Destekçiler talepinizi görüyor.</p>
+                                    <p className="text-[10px] text-gray-400 mt-2">Bu ekranı kapatabilirsiniz, bildirim gelecektir.</p>
                                 </div>
                             </div>
                         ) : (
@@ -282,10 +322,6 @@ export const FindShare: React.FC = () => {
                                         id: TrackerStep.QR_UPLOADED, 
                                         label: 'QR Yüklendi', 
                                     },
-                                    { 
-                                        id: TrackerStep.PAYMENT_CONFIRMED, 
-                                        label: 'Ödeme Yapıldı', 
-                                    },
                                     {
                                         id: TrackerStep.COMPLETED,
                                         label: 'Tamamlandı',
@@ -317,6 +353,7 @@ export const FindShare: React.FC = () => {
                         ) : (
                             <div className="text-center py-4">
                             <h3 className="font-bold text-gray-800 text-lg mb-2">Ödeme Yapmana Gerek Yok! 🎉</h3>
+                            <p className="text-xs text-gray-600 mb-4">%100 Destek aldın. Sadece QR bekle.</p>
                             <Button fullWidth onClick={handleCashPaid} className="bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200">
                                 Devam Et (QR Bekle)
                             </Button>
@@ -462,8 +499,8 @@ export const FindShare: React.FC = () => {
                   </p>
               </div>
 
-              <Button fullWidth onClick={handleCreateRequest} disabled={loading} className="py-4">
-                  {loading ? <Loader2 className="animate-spin" /> : 'Paylaşım Talebi Oluştur'}
+              <Button fullWidth onClick={handleCreateRequest} disabled={creating} className="py-4">
+                  {creating ? <Loader2 className="animate-spin" /> : 'Paylaşım Talebi Oluştur'}
               </Button>
            </div>
         </div>

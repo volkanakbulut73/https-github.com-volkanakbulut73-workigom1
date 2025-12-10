@@ -58,8 +58,6 @@ export const Supporters: React.FC = () => {
                const mockListings: UIListing[] = [
                   { id: '1', name: 'Ahmet Y.', amount: 1000, location: 'Kadıköy', time: '5 dk', rating: 4.8, avatar: 'https://picsum.photos/100/100', description: 'Öğle yemeği için yardım lazım', type: 'food' },
                   { id: '2', name: 'Zeynep K.', amount: 1200, location: 'Beşiktaş', time: '12 dk', rating: 5.0, avatar: 'https://picsum.photos/101/101', description: 'Migros alışverişi', type: 'market' },
-                  { id: '3', name: 'Can B.', amount: 80, location: 'Şişli', time: '20 dk', rating: 4.5, avatar: 'https://picsum.photos/102/102', description: 'Kahve dünyası', type: 'food' },
-                  { id: '4', name: 'Elif S.', amount: 450, location: 'Ataşehir', time: '30 dk', rating: 4.9, avatar: 'https://picsum.photos/103/103', description: 'Burger King', type: 'food' },
                ];
                return mockListings;
            }
@@ -74,6 +72,8 @@ export const Supporters: React.FC = () => {
 
     try {
         const { data: { user } } = await supabase.auth.getUser();
+        
+        // Use the updated service method that fetches from 'transactions' table
         const pendingData = await DBService.getPendingTransactions();
         
         const filteredData = user 
@@ -84,7 +84,7 @@ export const Supporters: React.FC = () => {
               id: item.id,
               name: formatName(item.profiles?.full_name),
               amount: item.amount,
-              location: item.profiles?.location || 'Konum Yok',
+              location: item.profiles?.location || 'Konum Yok', // If profile doesn't have location
               time: 'Az önce',
               rating: item.profiles?.rating || 5.0,
               avatar: item.profiles?.avatar_url || 'https://picsum.photos/100/100',
@@ -96,24 +96,10 @@ export const Supporters: React.FC = () => {
         if (user) {
            const activeTx = await DBService.getActiveTransaction(user.id);
            
-           if (activeTx && activeTx.supporter_id === user.id) {
-              const appTx: Transaction = {
-                 id: activeTx.id,
-                 listingId: activeTx.id,
-                 seekerId: activeTx.seeker_id,
-                 supporterId: activeTx.supporter_id,
-                 seekerName: formatName(activeTx.seeker?.full_name),
-                 supporterName: activeTx.supporter?.full_name || 'Ben',
-                 supportPercentage: activeTx.support_percentage as 20 | 100,
-                 amounts: calculateTransaction(activeTx.amount, activeTx.support_percentage as 20 | 100),
-                 status: activeTx.status as TrackerStep,
-                 createdAt: new Date(activeTx.created_at).getTime(),
-                 qrUrl: activeTx.qr_url,
-                 qrUploadedAt: activeTx.qr_uploaded_at ? new Date(activeTx.qr_uploaded_at).getTime() : undefined
-              };
-              setActiveTransaction(appTx);
+           if (activeTx && activeTx.supporterId === user.id) {
+               setActiveTransaction(activeTx);
               
-              if (activeTab === 'all' && appTx.status !== TrackerStep.COMPLETED && appTx.status !== TrackerStep.CANCELLED && appTx.status !== TrackerStep.FAILED) {
+              if (activeTab === 'all' && activeTx.status !== TrackerStep.COMPLETED && activeTx.status !== TrackerStep.CANCELLED && activeTx.status !== TrackerStep.FAILED) {
                   setActiveTab('my-support');
               }
            } else {
@@ -145,17 +131,19 @@ export const Supporters: React.FC = () => {
     const percentage = selectedPercentage;
     const calc = calculateTransaction(selectedListing.amount, percentage);
     
+    // Mock local object for immediate UI response
     const mockTx: Transaction = {
           id: `tx-${Date.now()}`,
-          listingId: selectedListing.id,
           seekerId: 'seeker-uuid',
-          seekerName: selectedListing.name,
           supporterId: 'current-user',
-          supporterName: 'Ben',
-          supportPercentage: percentage,
-          amounts: calc,
+          amount: selectedListing.amount,
+          listingTitle: selectedListing.description,
           status: TrackerStep.WAITING_CASH_PAYMENT,
-          createdAt: Date.now()
+          supportPercentage: percentage,
+          createdAt: new Date().toISOString(),
+          seekerName: selectedListing.name,
+          supporterName: 'Ben',
+          amounts: calc,
     };
 
     try {
@@ -177,11 +165,19 @@ export const Supporters: React.FC = () => {
 
         const updatedTx = await DBService.acceptTransaction(selectedListing.id, user.id, percentage);
         
+        // Re-construct proper Transaction object from DB response
         const realTx: Transaction = {
-          ...mockTx,
           id: updatedTx.id,
           seekerId: updatedTx.seeker_id,
-          supporterId: user.id
+          supporterId: user.id,
+          amount: updatedTx.amount,
+          listingTitle: updatedTx.listing_title,
+          status: updatedTx.status,
+          supportPercentage: updatedTx.support_percentage,
+          createdAt: updatedTx.created_at,
+          seekerName: selectedListing.name,
+          supporterName: 'Ben',
+          amounts: calculateTransaction(updatedTx.amount, updatedTx.support_percentage)
         };
 
         setActiveTransaction(realTx);
@@ -212,11 +208,11 @@ export const Supporters: React.FC = () => {
           const publicUrl = await DBService.uploadQR(file);
           await DBService.submitQR(activeTransaction.id, publicUrl);
 
-          const updated = {
+          const updated: Transaction = {
               ...activeTransaction,
               status: TrackerStep.QR_UPLOADED,
               qrUrl: publicUrl,
-              qrUploadedAt: Date.now()
+              qrUploadedAt: new Date().toISOString()
           };
           setActiveTransaction(updated);
           TransactionService.save(updated);
@@ -391,10 +387,10 @@ export const Supporters: React.FC = () => {
                         <Tracker 
                             currentStep={activeTransaction.status} 
                             steps={[
-                                { id: TrackerStep.SUPPORT_CONFIRMED, label: 'Onaylandı' }, 
-                                { id: TrackerStep.WAITING_CASH_PAYMENT, label: 'Ödeme' },
-                                { id: TrackerStep.QR_UPLOADED, label: 'QR Yükle' }, 
-                                { id: TrackerStep.PAYMENT_CONFIRMED, label: 'POS Onayı' }
+                                { id: TrackerStep.WAITING_CASH_PAYMENT, label: 'Ödeme' }, // Onaylandı step is implicit or can be re-added
+                                { id: TrackerStep.CASH_PAID, label: 'QR Hazırla' },
+                                { id: TrackerStep.QR_UPLOADED, label: 'QR Yüklendi' }, 
+                                { id: TrackerStep.COMPLETED, label: 'Tamamlandı' }
                             ]} 
                         />
 
@@ -406,6 +402,7 @@ export const Supporters: React.FC = () => {
                                         ? 'Ödeme Bekleniyor'
                                         : 'Ödeme Beklenmiyor'}
                                     </p>
+                                    <p className="text-[10px] text-blue-600">Alıcı nakit ödeme yapınca QR yükleyeceksin.</p>
                                 </div>
                             )}
 
@@ -414,7 +411,7 @@ export const Supporters: React.FC = () => {
                                     <div className="bg-green-50 p-3 rounded-xl flex items-center gap-2">
                                         <CheckCircle2 size={16} className="text-green-500 shrink-0"/>
                                         <p className="text-[10px] font-bold text-green-700">
-                                        Ödeme yapıldı!
+                                        Alıcı ödeme yaptı! Lütfen ödeme yapıp QR yükle.
                                         </p>
                                     </div>
                                     
