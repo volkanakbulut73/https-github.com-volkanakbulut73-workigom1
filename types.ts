@@ -118,6 +118,8 @@ export const formatName = (fullName: string): string => {
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 };
 
+const isUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
 export const calculateTransaction = (amount: number, percentage: 20 | 100) => {
   if (percentage === 100) {
     return {
@@ -317,7 +319,7 @@ export const DBService = {
   },
 
   acceptTransaction: async (txId: string, supporterId: string, percentage: number) => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && isUUID(txId)) {
         const { data, error } = await supabase
             .from('transactions')
             .update({
@@ -335,7 +337,7 @@ export const DBService = {
   },
 
   markCashPaid: async (txId: string) => {
-      if (isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && isUUID(txId)) {
           const { error } = await supabase
               .from('transactions')
               .update({ status: 'cash-paid' })
@@ -345,7 +347,7 @@ export const DBService = {
   },
 
   submitQR: async (txId: string, url: string) => {
-      if (isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && isUUID(txId)) {
           const { error } = await supabase
               .from('transactions')
               .update({ 
@@ -359,7 +361,7 @@ export const DBService = {
   },
 
   completeTransaction: async (txId: string) => {
-      if (isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && isUUID(txId)) {
           const { error } = await supabase
               .from('transactions')
               .update({ 
@@ -372,7 +374,7 @@ export const DBService = {
   },
 
   failTransaction: async (txId: string) => {
-      if (isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && isUUID(txId)) {
           const { error } = await supabase
               .from('transactions')
               .update({ status: 'failed' })
@@ -382,19 +384,19 @@ export const DBService = {
   },
 
   cancelTransaction: async (txId: string) => {
-      if (isSupabaseConfigured()) {
-          // Changed from UPDATE 'cancelled' to DELETE to avoid backend trigger errors (42601)
-          // Hard deleting the request clears the bad state effectively.
+      if (isSupabaseConfigured() && isUUID(txId)) {
+          // Using DELETE to handle cancellation clearly on backend
           const { error } = await supabase
               .from('transactions')
               .delete()
               .eq('id', txId);
           if (error) throw error;
       }
+      // If not UUID or not configured, it's local state, frontend will clear it
   },
 
   withdrawSupport: async (txId: string) => {
-      if (isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && isUUID(txId)) {
           const { error } = await supabase
               .from('transactions')
               .update({ 
@@ -408,10 +410,7 @@ export const DBService = {
   },
 
   dismissTransaction: async (txId: string) => {
-      // Sets the status to 'dismissed', archiving it from active view
-      // If dismiss fails (e.g. strict triggers), we catch and ignore in the UI layer
-      // but here we just attempt the update.
-      if (isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && isUUID(txId)) {
           const { error } = await supabase
               .from('transactions')
               .update({ status: 'dismissed' })
@@ -442,7 +441,6 @@ export const DBService = {
               return publicUrl;
           } catch (error) {
               console.warn("Supabase Storage error (likely bucket missing), falling back to Base64:", error);
-              // Fallback to base64 to ensure app doesn't crash if storage isn't set up
               return new Promise((resolve, reject) => {
                   const reader = new FileReader();
                   reader.readAsDataURL(file);

@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Send, Phone, MoreVertical, Loader2, Check, CheckCheck } from 'lucide-react';
+import { ChevronLeft, Send, Phone, MoreVertical, Loader2, Check, CheckCheck, MessageCircle } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { DBService, Message, User } from '../types';
 
@@ -257,6 +258,3 @@ export const ChatDetail: React.FC<ChatDetailProps> = ({ overrideUserId, isSplitV
     </div>
   );
 };
-
-// Add import to satisfy linter if used elsewhere
-import { MessageCircle } from 'lucide-react';
