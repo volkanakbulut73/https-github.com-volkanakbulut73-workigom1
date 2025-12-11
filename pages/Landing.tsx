@@ -42,8 +42,8 @@ export const Landing: React.FC = () => {
                 Mekanizması
               </h1>
               
-              <p className="text-slate-300 text-lg md:text-xl leading-relaxed max-w-xl mx-auto lg:mx-0 font-light">
-                Yemek kartı kullanıcılarını ve restoran ödemesi yapanları buluşturan güvenli P2P platformu. Bakiyenizi iskontolu kullanım hakkı ile takaslayın, karşılıklı kazanın.
+              <p className="text-slate-300 text-xl md:text-2xl leading-relaxed max-w-2xl mx-auto lg:mx-0 font-light mt-6">
+                Yemek kartı kullanıcılarını ve restoran ödemesi yapanları buluşturan güvenli P2P platformu. Bakiyenizi iskontolu kullanım hakkı ile paylaşın, karşılıklı kazanın.
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 pt-4 justify-center lg:justify-start">
