@@ -70,6 +70,44 @@ export const FindShare: React.FC = () => {
     init();
   }, [activeTransaction?.id]); // Re-subscribe if ID changes (e.g. new creation)
 
+  // Polling Mechanism to ensure status updates (Fixes 'not moving to cash payment' issue)
+  useEffect(() => {
+    if (!activeTransaction || 
+        activeTransaction.status === TrackerStep.COMPLETED || 
+        activeTransaction.status === TrackerStep.FAILED || 
+        activeTransaction.status === TrackerStep.CANCELLED ||
+        activeTransaction.status === TrackerStep.DISMISSED) return;
+
+    const interval = setInterval(async () => {
+        let userId = 'current-user';
+        if (isSupabaseConfigured()) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) userId = user.id;
+        } else {
+            // Local mock check
+            const stored = TransactionService.getActive();
+            if (stored && stored.id === activeTransaction.id && stored.status !== activeTransaction.status) {
+                setActiveTransaction(stored);
+            }
+            return;
+        }
+        
+        // DB check
+        const freshTx = await DBService.getActiveTransaction(userId);
+        if (freshTx) {
+             const statusChanged = freshTx.status !== activeTransaction.status;
+             const supporterChanged = freshTx.supporterId !== activeTransaction.supporterId;
+             
+             if (statusChanged || supporterChanged) {
+                 setActiveTransaction(freshTx);
+             }
+        }
+    }, 3000); // Check every 3 seconds
+
+    return () => clearInterval(interval);
+  }, [activeTransaction]);
+
+
   // Timer logic for QR validity (Mock)
   useEffect(() => {
       if (activeTransaction?.status === TrackerStep.QR_UPLOADED && activeTransaction.qrUploadedAt) {
@@ -205,7 +243,7 @@ export const FindShare: React.FC = () => {
         // Only clear and navigate if successful
         setActiveTransaction(null);
         TransactionService.clearActive();
-        navigate('/');
+        navigate('/app'); // Fixed: Redirect to App Home instead of Landing Page
     } catch (e: any) {
         console.error("Cancel failed", e);
         // Show error message and stay on the page
@@ -229,7 +267,7 @@ export const FindShare: React.FC = () => {
     }
      TransactionService.clearActive();
      setActiveTransaction(null);
-     navigate('/');
+     navigate('/app'); // Fixed: Redirect to App Home instead of Landing Page
   };
 
   if (activeTransaction) {
