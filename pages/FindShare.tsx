@@ -195,26 +195,37 @@ export const FindShare: React.FC = () => {
     if (!activeTransaction) return;
     if (!window.confirm("İşlemi iptal etmek istediğinize emin misiniz?")) return;
 
-    const txId = activeTransaction.id;
-    
-    // Optimistic clear
-    setActiveTransaction(null);
-    TransactionService.clearActive();
-    navigate('/');
-
+    setLoading(true);
     try {
         if (isSupabaseConfigured()) {
-            await DBService.cancelTransaction(txId);
+            // Await the cancellation. If it fails (e.g. 400 error), we catch it below.
+            await DBService.cancelTransaction(activeTransaction.id);
         }
+        
+        // Only clear and navigate if successful
+        setActiveTransaction(null);
+        TransactionService.clearActive();
+        navigate('/');
     } catch (e: any) {
-        console.error("Background cancel failed", e);
+        console.error("Cancel failed", e);
+        // Show error message and stay on the page
+        alert("İşlem iptal edilirken bir hata oluştu: " + (e.message || "Bilinmeyen Hata"));
+    } finally {
+        setLoading(false);
     }
   };
 
   const handleClearActive = async () => {
+    // This is used for Dismissing (Success/Fail screens)
     // If it was completed/cancelled/failed, we should dismiss it so it doesn't show up again
     if (activeTransaction && isSupabaseConfigured()) {
-        await DBService.dismissTransaction(activeTransaction.id);
+        try {
+            await DBService.dismissTransaction(activeTransaction.id);
+        } catch (e) {
+            console.error("Dismiss failed", e);
+            // We continue to clear locally even if DB fails for dismiss, 
+            // as the transaction is likely already in a final state.
+        }
     }
      TransactionService.clearActive();
      setActiveTransaction(null);
@@ -434,9 +445,10 @@ export const FindShare: React.FC = () => {
                         <div className="mt-8 text-center">
                             <button 
                                 onClick={handleCancelTransaction}
-                                className="text-red-400 text-xs font-bold py-2 px-4 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors"
+                                disabled={loading}
+                                className={`text-red-400 text-xs font-bold py-2 px-4 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
-                                İşlemi İptal Et
+                                {loading ? 'İptal Ediliyor...' : 'İşlemi İptal Et'}
                             </button>
                         </div>
                     )}
