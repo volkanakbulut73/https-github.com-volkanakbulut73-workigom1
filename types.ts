@@ -129,15 +129,23 @@ export const calculateTransaction = (amount: number, percentage: 20 | 100) => {
       refundToSupporter: 0
     };
   }
-  // 20% case
-  const seekerPayment = amount * 0.2; // User pays 20% in cash
-  const supportAmount = amount * 0.8; // Supporter pays 80% via card
-  const platformFee = supportAmount * 0.05; // 5% fee on support amount
-  const refundToSupporter = seekerPayment - platformFee; // Supporter gets cash minus fee
+  
+  // 20% case (Standart Takas Modeli)
+  // Toplam Tutar: 1000 TL
+  // Seeker (Talep Eden) %80 öder: 800 TL (Nakit)
+  // Supporter (Destekçi) %100 çeker (QR ile): 1000 TL
+  // Platform Komisyonu %5 (Toplam üzerinden): 50 TL
+  // Destekçiye İade Edilen: 800 TL (Seeker'dan gelen) - 50 TL (Komisyon) = 750 TL
+  // Destekçinin "Maliyeti/Katkısı": 1000 (Kart) - 750 (Nakit) = 250 TL (%20 indirim + %5 komisyon)
+
+  const seekerPayment = amount * 0.8; // User pays 80% in cash
+  const supportAmount = amount; // Supporter pays full amount via QR
+  const platformFee = amount * 0.05; // 5% fee on total amount
+  const refundToSupporter = seekerPayment - platformFee; // Supporter gets seeker's payment minus fee
 
   return {
     seekerPayment,
-    seekerSavings: amount - seekerPayment,
+    seekerSavings: amount - seekerPayment, // 20% savings
     supportAmount,
     refundToSupporter
   };

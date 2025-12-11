@@ -270,16 +270,22 @@ export const Supporters: React.FC = () => {
           };
       }
       // Logic for 20% Sharing (Trading)
-      const contribution = amount * 0.20; // 20% "contribution" (discount given)
-      const beneficiaryPays = amount * 0.80; // Beneficiary pays 80%
+      const contribution = amount * 0.20; // 20% discount (This is the supporter's "contribution" to the seeker)
+      const beneficiaryPays = amount * 0.80; // Beneficiary (Seeker) pays 80%
       const fee = amount * 0.05; // 5% fee on total
-      const totalPay = contribution + fee; // What the supporter "pays" in value/fee
-      const netReceive = beneficiaryPays - fee; // What supporter gets in cash (80% - fee)
+      
+      // Total Cost to Supporter = The discount given + The fee paid from the transaction
+      // Cost Logic: (Meal Card 1000) - (Net Cash Received) = Cost.
+      // Net Cash Received = 800 (from Seeker) - 50 (Fee) = 750.
+      // Cost = 1000 - 750 = 250.
+      const totalCostToSupporter = contribution + fee; 
+      
+      const netReceive = beneficiaryPays - fee; // What supporter gets in cash
 
       return {
           contribution,
           fee,
-          totalPay,
+          totalPay: totalCostToSupporter,
           netReceive,
           beneficiaryPays
       };
@@ -518,7 +524,7 @@ export const Supporters: React.FC = () => {
 
                             <div className="space-y-2 text-xs text-gray-600 font-medium">
                                 <div className="flex justify-between">
-                                    <span>Senin katkın:</span>
+                                    <span>Senin katkın (İndirim):</span>
                                     <span className="font-bold text-slate-900">{values.contribution} ₺</span>
                                 </div>
                                 <div className="flex justify-between">
@@ -527,7 +533,7 @@ export const Supporters: React.FC = () => {
                                 </div>
                                 <div className="h-px bg-gray-100 my-2"></div>
                                 <div className="flex justify-between text-sm">
-                                    <span className="font-bold text-slate-700">Toplam ödeyeceğin:</span>
+                                    <span className="font-bold text-slate-700">Toplam Maliyetin:</span>
                                     <span className="font-black text-slate-900">{values.totalPay} ₺</span>
                                 </div>
                             </div>

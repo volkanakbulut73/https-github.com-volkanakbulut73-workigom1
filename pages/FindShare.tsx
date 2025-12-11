@@ -394,13 +394,13 @@ export const FindShare: React.FC = () => {
                                 <div>
                                     <h3 className="font-bold text-gray-800">Ödeme Yapman Gerekiyor</h3>
                                     <p className="text-xs text-gray-600">
-                                    Restoran kasasına <strong className="text-gray-900">{activeTransaction.amounts.seekerPayment} TL</strong> ödeme yap.
+                                    Destekçiye <strong className="text-gray-900">{activeTransaction.amounts.seekerPayment} TL</strong> ödeme yap (IBAN/Nakit).
                                     </p>
                                 </div>
                             </div>
                             
                             <Button fullWidth onClick={handleCashPaid} disabled={loading} className="py-4 shadow-lg shadow-primary/20">
-                                {loading ? <Loader2 className="animate-spin" /> : '✅ Ödemeyi Tamamladım'}
+                                {loading ? <Loader2 className="animate-spin" /> : '✅ Ödemeyi Yaptım'}
                             </Button>
                             </>
                         ) : (
