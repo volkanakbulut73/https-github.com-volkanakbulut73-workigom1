@@ -159,13 +159,13 @@ export const Landing: React.FC = () => {
                 <StepCard 
                    icon={<QrCode size={32} className="text-white" />}
                    title="2. QR Takas"
-                   desc="Kart sahibi, restoranın POS cihazındaki QR'ı okutarak hesabı öder. Bu işlem 'kullanım hakkı devri'dir."
+                   desc="Yemek Kartı sahibi, QR paylaşarak restoranın POS cihazındaki QR'ı okutarak hesabı öder. Bu işlem 'kullanım hakkı paylaşımıdır."
                    color="bg-emerald-500"
                 />
                 <StepCard 
                    icon={<Lock size={32} className="text-white" />}
                    title="3. Escrow Transfer"
-                   desc="Alıcı, indirimli tutarı Workigom havuzuna gönderir. İşlem onaylanınca bakiye satıcıya aktarılır."
+                   desc="Alıcı, indirimli tutarı Workigom havuzuna gönderir. İşlem onaylanınca bakiye Yemek kartı kullanıcısına  aktarılır."
                    color="bg-blue-600"
                 />
             </div>
@@ -191,7 +191,7 @@ export const Landing: React.FC = () => {
                      </div>
                      
                      <div className="space-y-4">
-                        <ReviewRow name="Caner E." rating={5} comment="Hızlı ve güvenli. QR anında çalıştı." time="2dk önce" />
+                        <ReviewRow name="Caner E." rating={5} comment="Hızlı ve güvenli. QR paylaşımı mükemmel :) ." time="2dk önce" />
                         <ReviewRow name="Selin A." rating={5} comment="Bakiyemi değerlendirmek için harika bir yol." time="15dk önce" />
                         <ReviewRow name="Mert K." rating={4.8} comment="Escrow sistemi sayesinde içim rahat." time="1s önce" />
                      </div>
@@ -233,7 +233,7 @@ export const Landing: React.FC = () => {
             >
                Ücretsiz Hesap Oluştur
             </button>
-            <p className="mt-6 text-slate-500 text-sm">Kredi kartı gerekmez • 7/24 Destek</p>
+            <p className="mt-6 text-slate-500 text-sm">Hızlı,Güvenli • 7/24 Destek</p>
          </div>
       </div>
 
