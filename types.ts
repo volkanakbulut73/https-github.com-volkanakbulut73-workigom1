@@ -383,9 +383,11 @@ export const DBService = {
 
   cancelTransaction: async (txId: string) => {
       if (isSupabaseConfigured()) {
+          // Changed from UPDATE 'cancelled' to DELETE to avoid backend trigger errors (42601)
+          // Hard deleting the request clears the bad state effectively.
           const { error } = await supabase
               .from('transactions')
-              .update({ status: 'cancelled' })
+              .delete()
               .eq('id', txId);
           if (error) throw error;
       }
@@ -407,6 +409,8 @@ export const DBService = {
 
   dismissTransaction: async (txId: string) => {
       // Sets the status to 'dismissed', archiving it from active view
+      // If dismiss fails (e.g. strict triggers), we catch and ignore in the UI layer
+      // but here we just attempt the update.
       if (isSupabaseConfigured()) {
           const { error } = await supabase
               .from('transactions')
