@@ -492,10 +492,148 @@ export const DBService = {
 
 export const SwapService = {
   getListings: async (): Promise<SwapListing[]> => {
-      return [];
+    if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+            .from('swap_listings')
+            .select('*')
+            .order('created_at', { ascending: false });
+        
+        if (data) {
+            return data.map(item => ({
+                id: item.id,
+                title: item.title,
+                description: item.description,
+                requiredBalance: item.required_balance,
+                photoUrl: item.photo_url,
+                location: item.location,
+                ownerId: item.owner_id,
+                ownerName: item.owner_name,
+                ownerAvatar: item.owner_avatar,
+                createdAt: item.created_at
+            }));
+        }
+    }
+    
+    // Local Storage Fallback
+    try {
+        const stored = localStorage.getItem('swap_listings');
+        return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
   },
-  uploadImage: async (file: File): Promise<string> => { return URL.createObjectURL(file); },
-  createListing: async (title: string, description: string, price: number, photo: string) => {},
-  getListingById: async (id: string): Promise<SwapListing | null> => { return null; },
-  deleteListing: async (id: string) => {}
+
+  uploadImage: async (file: File): Promise<string> => {
+      if (isSupabaseConfigured()) {
+           try {
+              const fileExt = file.name.split('.').pop();
+              const fileName = `swap-${Math.random().toString(36).substring(2)}.${fileExt}`;
+              const filePath = `${fileName}`;
+
+              const { error: uploadError } = await supabase.storage
+                .from('swap-images') 
+                .upload(filePath, file);
+
+              if (uploadError) throw uploadError;
+
+              const { data: { publicUrl } } = supabase.storage
+                .from('swap-images')
+                .getPublicUrl(filePath);
+
+              return publicUrl;
+          } catch (error) {
+              console.warn("Supabase Swap Upload Failed, falling back to base64", error);
+          }
+      }
+      
+      // Base64 fallback for local storage persistence
+      return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = error => reject(error);
+      });
+  },
+
+  createListing: async (title: string, description: string, price: number, photo: string) => {
+      // Get current user for owner details
+      let user = ReferralService.getUserProfile();
+      
+      if (isSupabaseConfigured()) {
+          const { data: authData } = await supabase.auth.getUser();
+          if (authData.user) {
+              const profile = await DBService.getUserProfile(authData.user.id);
+              if (profile) user = profile;
+          }
+
+          const { error } = await supabase.from('swap_listings').insert({
+              title,
+              description,
+              required_balance: price,
+              photo_url: photo,
+              location: user.location,
+              owner_id: user.id,
+              owner_name: user.name,
+              owner_avatar: user.avatar
+          });
+          
+          if (error) {
+              console.error("Supabase Create Error", error);
+              throw error;
+          }
+          return;
+      }
+
+      // Local Storage Logic
+      const newListing: SwapListing = {
+          id: `swap-${Date.now()}`,
+          title,
+          description,
+          requiredBalance: price,
+          photoUrl: photo,
+          location: user.location,
+          ownerId: user.id,
+          ownerName: user.name,
+          ownerAvatar: user.avatar,
+          createdAt: new Date().toISOString()
+      };
+
+      const current = await SwapService.getListings();
+      const updated = [newListing, ...current];
+      localStorage.setItem('swap_listings', JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+  },
+
+  getListingById: async (id: string): Promise<SwapListing | null> => {
+      if (isSupabaseConfigured()) {
+          const { data } = await supabase.from('swap_listings').select('*').eq('id', id).single();
+          if (data) {
+              return {
+                id: data.id,
+                title: data.title,
+                description: data.description,
+                requiredBalance: data.required_balance,
+                photoUrl: data.photo_url,
+                location: data.location,
+                ownerId: data.owner_id,
+                ownerName: data.owner_name,
+                ownerAvatar: data.owner_avatar,
+                createdAt: data.created_at
+              };
+          }
+      }
+      
+      const listings = await SwapService.getListings();
+      return listings.find(l => l.id === id) || null;
+  },
+
+  deleteListing: async (id: string) => {
+      if (isSupabaseConfigured()) {
+          await supabase.from('swap_listings').delete().eq('id', id);
+          return;
+      }
+
+      const listings = await SwapService.getListings();
+      const updated = listings.filter(l => l.id !== id);
+      localStorage.setItem('swap_listings', JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+  }
 };
