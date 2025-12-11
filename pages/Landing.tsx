@@ -38,8 +38,8 @@ export const Landing: React.FC = () => {
               
               <h1 className="text-5xl md:text-7xl font-black text-white leading-[1.1] tracking-tight">
                 Güvenli <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">QR Takas</span> <br />
-                Mekanizması
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">Yemek Kartı</span> <br />
+                Paylaşımı
               </h1>
               
               <p className="text-slate-300 text-xl md:text-2xl leading-relaxed max-w-2xl mx-auto lg:mx-0 font-light mt-6">
