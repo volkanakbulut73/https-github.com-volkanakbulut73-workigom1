@@ -141,7 +141,7 @@ export const Landing: React.FC = () => {
                <span className="text-emerald-600 font-bold tracking-widest uppercase text-xs mb-2 block">Ekosistem</span>
                <h2 className="text-3xl md:text-5xl font-black text-slate-900 mb-6">Akıllı Takas Modeli</h2>
                <p className="text-lg text-gray-500 leading-relaxed">
-                  Workigom, nakit akışını doğrudan yönetmez. Kullanıcıların güvenli bir ortamda "kullanım hakkı" takası yapmasını sağlar.
+                  Workigom, nakit akışını doğrudan yönetmez. Kullanıcıların güvenli bir ortamda "kullanım hakkı" paylaşımı yapmasını sağlar.
                </p>
             </div>
 
