@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ShieldCheck, Zap, Users, QrCode, Repeat, Star, Lock, Wallet } from 'lucide-react';
@@ -154,17 +153,27 @@ export const Landing: React.FC = () => {
                 <div className="relative z-10 flex flex-col items-center text-center p-6 bg-white rounded-[2rem] shadow-xl border border-gray-100 group hover:-translate-y-2 transition-transform duration-300">
                     <div className="w-full h-40 bg-slate-50 rounded-2xl mb-8 flex items-center justify-center relative overflow-hidden group-hover:bg-slate-100 transition-colors">
                         {/* Visual: Matching */}
-                        <div className="absolute left-8 top-1/2 -translate-y-1/2 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-emerald-500 z-10 transform -rotate-6">
-                            <img src="https://picsum.photos/100/100?random=1" className="w-full h-full rounded-full p-0.5" alt="User 1" />
-                        </div>
-                        <div className="absolute right-8 top-1/2 -translate-y-1/2 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-blue-500 z-10 transform rotate-6">
-                            <img src="https://picsum.photos/100/100?random=2" className="w-full h-full rounded-full p-0.5" alt="User 2" />
-                        </div>
                         <div className="absolute inset-0 flex items-center justify-center">
                             <div className="w-24 h-0.5 bg-gray-300"></div>
-                            <div className="absolute bg-white p-2 rounded-full shadow-md border border-gray-100">
-                                <Repeat size={18} className="text-slate-400" />
+                            <div className="absolute bg-white p-2 rounded-full shadow-md border border-gray-100 z-20">
+                                <Repeat size={18} className="text-emerald-500" />
                             </div>
+                        </div>
+                        
+                        {/* User 1 (Left) */}
+                        <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col items-center z-10">
+                            <div className="w-14 h-14 bg-white rounded-full shadow-lg p-0.5 border-2 border-emerald-500 mb-2 transform -rotate-3 hover:rotate-0 transition-transform">
+                                <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=60" className="w-full h-full rounded-full object-cover" alt="Ahmet Y." />
+                            </div>
+                            <span className="bg-white/90 backdrop-blur-sm text-[10px] font-bold text-slate-900 px-2 py-0.5 rounded-md shadow-sm border border-gray-100">Ahmet Y.</span>
+                        </div>
+
+                        {/* User 2 (Right) */}
+                        <div className="absolute right-6 top-1/2 -translate-y-1/2 flex flex-col items-center z-10">
+                            <div className="w-14 h-14 bg-white rounded-full shadow-lg p-0.5 border-2 border-blue-500 mb-2 transform rotate-3 hover:rotate-0 transition-transform">
+                                <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=60" className="w-full h-full rounded-full object-cover" alt="Zeynep K." />
+                            </div>
+                            <span className="bg-white/90 backdrop-blur-sm text-[10px] font-bold text-slate-900 px-2 py-0.5 rounded-md shadow-sm border border-gray-100">Zeynep K.</span>
                         </div>
                     </div>
                     <div className="w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center text-lg font-bold mb-4 shadow-lg shadow-slate-900/30 absolute -top-5 ring-4 ring-white">1</div>
