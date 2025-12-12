@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ShieldCheck, Zap, Users, QrCode, Repeat, Star, Lock } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Zap, Users, QrCode, Repeat, Star, Lock, Wallet } from 'lucide-react';
 import { WebNavbar } from '../components/WebNavbar';
 import { Footer } from '../components/Footer';
 
@@ -36,14 +36,14 @@ export const Landing: React.FC = () => {
                 <span className="text-emerald-100 text-xs font-bold tracking-widest uppercase">P2P Yemek Kartı Paylaşım Ağı</span>
               </div>
               
-              <h1 className="text-5xl md:text-7xl font-black text-white leading-[1.1] tracking-tight">
+              <h1 className="text-5xl md:text-7xl font-black text-white leading-[1.1] tracking-tight mt-6">
                 Güvenli <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">Yemek Kartı</span> <br />
-                Paylaşımı
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">QR Takas</span> <br />
+                Mekanizması
               </h1>
               
               <p className="text-slate-300 text-xl md:text-2xl leading-relaxed max-w-2xl mx-auto lg:mx-0 font-light mt-6">
-                Yemek kartı kullanıcılarını ve restoran ödemesi yapanları buluşturan güvenli P2P platformu. Kullanmadığınız yemek kartı kullanım hakkını paylaşın, birlikte avantaj sağlayın.
+                Yemek kartı kullanıcılarını ve restoran ödemesi yapanları buluşturan güvenli P2P platformu. Bakiyenizi iskontolu kullanım hakkı ile paylaşın, karşılıklı kazanın.
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 pt-4 justify-center lg:justify-start">
@@ -142,32 +142,77 @@ export const Landing: React.FC = () => {
                <span className="text-emerald-600 font-bold tracking-widest uppercase text-xs mb-2 block">Ekosistem</span>
                <h2 className="text-3xl md:text-5xl font-black text-slate-900 mb-6">Akıllı Takas Modeli</h2>
                <p className="text-lg text-gray-500 leading-relaxed">
-                  Workigom, nakit akışını doğrudan yönetmez. Kullanıcıların güvenli bir ortamda "kullanım hakkı" Paylaşımı yapmasını sağlar.
+                  Workigom, nakit akışını doğrudan yönetmez. Kullanıcıların güvenli bir ortamda "kullanım hakkı" takası yapmasını sağlar.
                </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative mt-16">
                 {/* Connecting Line (Desktop) */}
-                <div className="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-gradient-to-r from-emerald-100 via-emerald-500 to-emerald-100 border-t-2 border-dashed border-emerald-200 z-0"></div>
+                <div className="hidden md:block absolute top-20 left-[20%] right-[20%] h-0.5 bg-gradient-to-r from-emerald-100 via-emerald-500 to-emerald-100 border-t-2 border-dashed border-emerald-200 z-0"></div>
 
-                <StepCard 
-                   icon={<Users size={32} className="text-white" />}
-                   title="1. Eşleşme"
-                   desc="Restoranda hesap ödeyecek kişi ile yemek kartı bakiyesi olan kullanıcı platformda eşleşir."
-                   color="bg-slate-900"
-                />
-                <StepCard 
-                   icon={<QrCode size={32} className="text-white" />}
-                   title="2. QR Takas"
-                   desc="Yemek Kartı sahibi, QR paylaşarak restoranın POS cihazındaki QR'ı okutarak hesabı öder. Bu işlem 'kullanım hakkı paylaşımıdır."
-                   color="bg-emerald-500"
-                />
-                <StepCard 
-                   icon={<Lock size={32} className="text-white" />}
-                   title="3. Escrow Transfer"
-                   desc="Restoranda müşterisi, indirimli tutarı Workigom havuzuna gönderir. İşlem onaylanınca bakiye Yemek kartı kullanıcısına  aktarılır."
-                   color="bg-blue-600"
-                />
+                {/* Step 1 */}
+                <div className="relative z-10 flex flex-col items-center text-center p-6 bg-white rounded-[2rem] shadow-xl border border-gray-100 group hover:-translate-y-2 transition-transform duration-300">
+                    <div className="w-full h-40 bg-slate-50 rounded-2xl mb-8 flex items-center justify-center relative overflow-hidden group-hover:bg-slate-100 transition-colors">
+                        {/* Visual: Matching */}
+                        <div className="absolute left-8 top-1/2 -translate-y-1/2 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-emerald-500 z-10 transform -rotate-6">
+                            <img src="https://picsum.photos/100/100?random=1" className="w-full h-full rounded-full p-0.5" alt="User 1" />
+                        </div>
+                        <div className="absolute right-8 top-1/2 -translate-y-1/2 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-blue-500 z-10 transform rotate-6">
+                            <img src="https://picsum.photos/100/100?random=2" className="w-full h-full rounded-full p-0.5" alt="User 2" />
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-24 h-0.5 bg-gray-300"></div>
+                            <div className="absolute bg-white p-2 rounded-full shadow-md border border-gray-100">
+                                <Repeat size={18} className="text-slate-400" />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center text-lg font-bold mb-4 shadow-lg shadow-slate-900/30 absolute -top-5 ring-4 ring-white">1</div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-3">Talep & Eşleşme</h3>
+                    <p className="text-gray-500 text-sm leading-relaxed">
+                        Restoranda ödeme yapacak kişi ile yemek kartı bakiyesi olan kullanıcı anında eşleşir. Konum bazlı en yakın fırsatı bulursunuz.
+                    </p>
+                </div>
+
+                {/* Step 2 */}
+                <div className="relative z-10 flex flex-col items-center text-center p-6 bg-white rounded-[2rem] shadow-xl border border-gray-100 group hover:-translate-y-2 transition-transform duration-300">
+                    <div className="w-full h-40 bg-emerald-50 rounded-2xl mb-8 flex items-center justify-center relative overflow-hidden group-hover:bg-emerald-100 transition-colors">
+                        {/* Visual: QR */}
+                        <div className="w-24 h-32 bg-white rounded-xl border-4 border-slate-800 shadow-xl flex flex-col items-center justify-center relative transform rotate-0">
+                            <div className="w-8 h-1 bg-gray-200 rounded-full mb-3 absolute top-2"></div>
+                            <QrCode size={48} className="text-slate-900" />
+                        </div>
+                        <div className="absolute -right-2 bottom-6 bg-emerald-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1 animate-bounce">
+                           <ShieldCheck size={12} /> Onaylandı
+                        </div>
+                    </div>
+                    <div className="w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center text-lg font-bold mb-4 shadow-lg shadow-emerald-500/30 absolute -top-5 ring-4 ring-white">2</div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-3">QR ile Ödeme</h3>
+                    <p className="text-gray-500 text-sm leading-relaxed">
+                        Kart sahibi, restoranın POS cihazına QR kodunu okutarak hesabı öder. Bu işlem "kullanım hakkı" paylaşımıdır.
+                    </p>
+                </div>
+
+                {/* Step 3 */}
+                <div className="relative z-10 flex flex-col items-center text-center p-6 bg-white rounded-[2rem] shadow-xl border border-gray-100 group hover:-translate-y-2 transition-transform duration-300">
+                    <div className="w-full h-40 bg-blue-50 rounded-2xl mb-8 flex items-center justify-center relative overflow-hidden group-hover:bg-blue-100 transition-colors">
+                        {/* Visual: Wallet */}
+                        <Lock size={80} className="text-blue-500 opacity-10 absolute rotate-12" />
+                        <div className="flex flex-col items-center bg-white p-4 rounded-2xl shadow-lg border border-blue-100 z-10 w-40">
+                            <div className="flex items-center gap-2 mb-2 w-full border-b border-gray-100 pb-2">
+                                <Wallet size={16} className="text-slate-400" />
+                                <span className="text-[10px] font-bold text-slate-500">Cüzdanım</span>
+                            </div>
+                            <p className="text-2xl font-black text-emerald-500 tracking-tight">+ ₺800</p>
+                        </div>
+                    </div>
+                    <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center text-lg font-bold mb-4 shadow-lg shadow-blue-600/30 absolute -top-5 ring-4 ring-white">3</div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-3">Güvenli Transfer</h3>
+                    <p className="text-gray-500 text-sm leading-relaxed">
+                        İşlem kanıtlandığında, alıcının havuza gönderdiği indirimli tutar (Escrow) kart sahibinin cüzdanına anında aktarılır.
+                    </p>
+                </div>
+
             </div>
          </div>
       </div>
@@ -241,16 +286,6 @@ export const Landing: React.FC = () => {
     </div>
   );
 };
-
-const StepCard = ({icon, title, desc, color}: any) => (
-   <div className="relative z-10 flex flex-col items-center text-center p-8 bg-white rounded-3xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow group">
-      <div className={`w-20 h-20 ${color} rounded-2xl flex items-center justify-center mb-6 shadow-lg transform group-hover:-translate-y-2 transition-transform duration-300`}>
-         {icon}
-      </div>
-      <h3 className="text-xl font-bold text-slate-900 mb-3">{title}</h3>
-      <p className="text-gray-500 text-sm leading-relaxed">{desc}</p>
-   </div>
-);
 
 const ReviewRow = ({name, rating, comment, time}: any) => (
    <div className="flex items-start gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
