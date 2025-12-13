@@ -27,7 +27,7 @@ export const Landing: React.FC = () => {
             
             {/* Left Content */}
             <div className="space-y-8 animate-fade-in text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-lg px-4 py-1.5 rounded-full border border-white/10 shadow-xl mx-auto lg:mx-0">
+              <div className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-lg px-4 py-1.5 rounded-full border border-white/10 shadow-xl mx-auto lg:mx-0 mt-6">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -141,7 +141,7 @@ export const Landing: React.FC = () => {
                <span className="text-emerald-600 font-bold tracking-widest uppercase text-xs mb-2 block">Ekosistem</span>
                <h2 className="text-3xl md:text-5xl font-black text-slate-900 mb-6">Akıllı Takas Modeli</h2>
                <p className="text-lg text-gray-500 leading-relaxed">
-                  Workigom, nakit akışını doğrudan yönetmez. Kullanıcıların güvenli bir ortamda "kullanım hakkı" paylaşımı yapmasını sağlar.
+                  Workigom, nakit akışını doğrudan yönetmez. Kullanıcıların güvenli bir ortamda "kullanım hakkı" takası yapmasını sağlar.
                </p>
             </div>
 
@@ -198,7 +198,7 @@ export const Landing: React.FC = () => {
                     <div className="w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center text-lg font-bold mb-4 shadow-lg shadow-emerald-500/30 absolute -top-5 ring-4 ring-white">2</div>
                     <h3 className="text-xl font-bold text-slate-900 mb-3">QR ile Ödeme</h3>
                     <p className="text-gray-500 text-sm leading-relaxed">
-                        Kart sahibi, workigom paylaşım sistemine QR Kodu yükler.Bu kod paylaşılan kişiye gönderilir ve restoranın POS cihazına QR kodunu okutarak hesabı öder. Bu işlem "kullanım hakkı" paylaşımıdır.
+                        Kart sahibi, restoranın POS cihazına QR kodunu okutarak hesabı öder. Bu işlem "kullanım hakkı" paylaşımıdır.
                     </p>
                 </div>
 
