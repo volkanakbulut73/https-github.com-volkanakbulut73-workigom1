@@ -198,7 +198,7 @@ export const Landing: React.FC = () => {
                     <div className="w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center text-lg font-bold mb-4 shadow-lg shadow-emerald-500/30 absolute -top-5 ring-4 ring-white">2</div>
                     <h3 className="text-xl font-bold text-slate-900 mb-3">QR ile Ödeme</h3>
                     <p className="text-gray-500 text-sm leading-relaxed">
-                        Kart sahibi, restoranın POS cihazına QR kodunu okutarak hesabı öder. Bu işlem "kullanım hakkı" paylaşımıdır.
+                        Kart sahibi, workigom paylaşım sistemine QR Kodu yükler.Bu kod paylaşılan kişiye gönderilir ve restoranın POS cihazına QR kodunu okutarak hesabı öder. Bu işlem "kullanım hakkı" paylaşımıdır.
                     </p>
                 </div>
 
