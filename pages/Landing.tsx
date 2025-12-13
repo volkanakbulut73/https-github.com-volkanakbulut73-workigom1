@@ -141,7 +141,7 @@ export const Landing: React.FC = () => {
                <span className="text-emerald-600 font-bold tracking-widest uppercase text-xs mb-2 block">Ekosistem</span>
                <h2 className="text-3xl md:text-5xl font-black text-slate-900 mb-6">Akıllı Takas Modeli</h2>
                <p className="text-lg text-gray-500 leading-relaxed">
-                  Workigom, nakit akışını doğrudan yönetmez. Kullanıcıların güvenli bir ortamda "kullanım hakkı" takası yapmasını sağlar.
+                  Workigom, nakit akışını doğrudan yönetmez. Kullanıcıların güvenli bir ortamda "kullanım hakkı" paylaşımı yapmasını sağlar.
                </p>
             </div>
 
@@ -179,7 +179,7 @@ export const Landing: React.FC = () => {
                     <div className="w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center text-lg font-bold mb-4 shadow-lg shadow-slate-900/30 absolute -top-5 ring-4 ring-white">1</div>
                     <h3 className="text-xl font-bold text-slate-900 mb-3">Talep & Eşleşme</h3>
                     <p className="text-gray-500 text-sm leading-relaxed">
-                        Restoranda ödeme yapacak kişi ile yemek kartı bakiyesi olan kullanıcı anında eşleşir. Konum bazlı en yakın fırsatı bulursunuz.
+                        Restoranda ödeme yapacak kişi ile yemek kartı bakiyesi olan kullanıcı anında online olarak eşleşir ve tüm süreç dakikalar içerisinde tamamlanır.
                     </p>
                 </div>
 
@@ -198,7 +198,7 @@ export const Landing: React.FC = () => {
                     <div className="w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center text-lg font-bold mb-4 shadow-lg shadow-emerald-500/30 absolute -top-5 ring-4 ring-white">2</div>
                     <h3 className="text-xl font-bold text-slate-900 mb-3">QR ile Ödeme</h3>
                     <p className="text-gray-500 text-sm leading-relaxed">
-                        Kart sahibi, restoranın POS cihazına QR kodunu okutarak hesabı öder. Bu işlem "kullanım hakkı" paylaşımıdır.
+                        Kart sahibi,oluşturduğu QR/PİN kodunu  sistem üzerinden paylaştığı kullanıcıya sistem üzerinden gönderir ve kullanıcı restoranın POS cihazına QR kodunu okutarak hesabı öder. Bu işlem "kullanım hakkı" paylaşımıdır.
                     </p>
                 </div>
 
