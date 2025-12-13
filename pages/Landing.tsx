@@ -22,12 +22,13 @@ export const Landing: React.FC = () => {
           <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
         </div>
 
-        <div className="flex-1 flex items-center relative z-10 py-12 md:py-0">
+        {/* Updated container padding: pt-36 to clear navbar on all screens */}
+        <div className="flex-1 flex items-center relative z-10 pt-36 pb-16 md:pt-32 md:pb-0">
           <div className="max-w-7xl mx-auto px-6 w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
             
             {/* Left Content */}
             <div className="space-y-8 animate-fade-in text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-lg px-4 py-1.5 rounded-full border border-white/10 shadow-xl mx-auto lg:mx-0 mt-12">
+              <div className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-lg px-4 py-1.5 rounded-full border border-white/10 shadow-xl mx-auto lg:mx-0">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
