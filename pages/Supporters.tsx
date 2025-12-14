@@ -55,8 +55,8 @@ export const Supporters: React.FC = () => {
        setListings(currentListings => {
            if (currentListings.length === 0) {
                const mockListings: UIListing[] = [
-                  { id: '1', name: 'Ahmet Y.', amount: 1000, location: 'Kadıköy', time: '5 dk önce', rating: 4.8, avatar: 'https://picsum.photos/100/100', description: 'Öğle yemeği için acil destek lazım, Sodexo geçerli.', type: 'food' },
-                  { id: '2', name: 'Zeynep K.', amount: 1200, location: 'Beşiktaş', time: '12 dk önce', rating: 5.0, avatar: 'https://picsum.photos/101/101', description: 'Migros alışverişi yapacağım, yardımcı olabilir misiniz?', type: 'market' },
+                  { id: '1', name: 'Ahmet Y.', amount: 1000, location: 'Kadıköy', time: '5 dk önce', rating: 4.8, avatar: 'https://picsum.photos/100/100', description: 'Öğle yemeği acil', type: 'food' },
+                  { id: '2', name: 'Zeynep K.', amount: 1200, location: 'Beşiktaş', time: '12 dk önce', rating: 5.0, avatar: 'https://picsum.photos/101/101', description: 'Migros alışverişi', type: 'market' },
                ];
                return mockListings;
            }
@@ -315,56 +315,46 @@ export const Supporters: React.FC = () => {
                ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="flex flex-col gap-4 max-w-2xl mx-auto">
               {loading ? (
                  <div className="col-span-full text-center py-10 text-gray-400"><Loader2 size={32} className="animate-spin mx-auto mb-3" /><p className="text-xs">Yükleniyor...</p></div>
               ) : filteredListings.length === 0 ? (
                  <div className="col-span-full text-center py-10 text-gray-400 bg-white rounded-2xl border border-gray-100"><p className="text-sm font-medium">Şu an aktif talep bulunmuyor.</p></div>
               ) : (
                  filteredListings.map((listing) => (
-                   <div key={listing.id} onClick={(e) => handleSupportClick(e, listing)} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 hover:shadow-lg transition-all cursor-pointer group flex flex-col gap-4 relative overflow-hidden">
-                     {/* Decorative gradient blob */}
-                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-bl-full -mr-8 -mt-8 z-0 transition-transform group-hover:scale-110"></div>
+                   <div key={listing.id} onClick={(e) => handleSupportClick(e, listing)} className="bg-white rounded-[1.5rem] p-4 shadow-sm border border-gray-100 hover:shadow-md transition-all cursor-pointer group relative overflow-hidden">
                      
-                     <div className="flex justify-between items-start relative z-10">
-                        <div className="flex items-center gap-3">
-                            <div className="w-14 h-14 rounded-full p-0.5 bg-white shadow-sm border border-gray-100">
+                     <div className="flex items-center justify-between gap-3 relative z-10">
+                        {/* Left Section: Avatar + Info */}
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                            <div className="w-14 h-14 rounded-full p-0.5 bg-white shadow-sm border border-gray-100 shrink-0">
                                 <img src={listing.avatar} className="w-full h-full rounded-full object-cover" alt="User" />
                             </div>
-                            <div>
-                                <h3 className="text-slate-900 font-bold text-base leading-tight">{listing.name}</h3>
-                                <div className="flex items-center gap-1 mt-0.5">
-                                    <Heart size={12} className="text-rose-500 fill-rose-500" />
-                                    <span className="text-xs font-medium text-gray-500">{listing.rating}</span>
+                            <div className="min-w-0">
+                                <h3 className="text-slate-900 font-bold text-lg leading-tight truncate">{listing.name}</h3>
+                                <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
+                                    <div className="flex items-center gap-1 font-bold text-rose-500 shrink-0">
+                                        <Heart size={14} className="fill-rose-500" />
+                                        <span>{listing.rating}</span>
+                                    </div>
+                                    <span className="truncate text-xs font-medium text-gray-500">{listing.description}</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-[10px] text-gray-400 mt-1 font-medium">
+                                    <Clock size={12} />
+                                    {listing.time}
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-emerald-500 text-white px-3 py-1.5 rounded-xl shadow-lg shadow-emerald-200 font-bold text-sm tracking-wide">
-                            {listing.amount} ₺
+
+                        {/* Right Section: Price & Button */}
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                            <div className="bg-[#14532d] text-white px-5 py-2 rounded-xl font-black text-xl tracking-tight shadow-lg shadow-green-900/20 transform group-hover:scale-105 transition-transform">
+                                {listing.amount} <span className="text-sm font-medium">₺</span>
+                            </div>
+                            <button className="bg-slate-900 text-white px-5 py-2.5 rounded-full font-bold text-xs hover:bg-slate-800 transition-all flex items-center gap-1">
+                                Paylaş <ArrowRight size={14} />
+                            </button>
                         </div>
-                     </div>
-
-                     <div className="relative z-10 min-h-[3rem]">
-                        <p className="text-sm text-gray-600 leading-relaxed font-medium line-clamp-3">
-                           {listing.description}
-                        </p>
-                     </div>
-
-                     <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between relative z-10">
-                         <div className="flex flex-col gap-1 text-xs text-gray-400 font-medium">
-                            <div className="flex items-center gap-1.5">
-                                <MapPin size={14} className="text-gray-300" />
-                                {listing.location}
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                                <Clock size={14} className="text-gray-300" />
-                                {listing.time}
-                            </div>
-                         </div>
-                         
-                         <button className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-bold text-sm hover:bg-slate-800 active:scale-95 transition-all shadow-md flex items-center gap-2 group-hover:pl-8">
-                             Paylaş <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
-                         </button>
                      </div>
                    </div>
                  ))
