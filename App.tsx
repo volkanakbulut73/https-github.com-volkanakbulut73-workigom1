@@ -1,5 +1,5 @@
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { BottomNav } from './components/BottomNav';
 import { WebNavbar } from './components/WebNavbar';
 import { Sidebar } from './components/Sidebar';
@@ -88,9 +88,9 @@ const AppRoutes: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <HashRouter>
+    <BrowserRouter>
       <AppRoutes />
-    </HashRouter>
+    </BrowserRouter>
   );
 };
 
