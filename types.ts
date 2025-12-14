@@ -183,6 +183,12 @@ export const ReferralService = {
     localStorage.setItem('user_profile', JSON.stringify(user));
     window.dispatchEvent(new Event('storage'));
   },
+  logout: () => {
+    localStorage.removeItem('user_profile');
+    // We can also clear active transaction session data if desired
+    // localStorage.removeItem('active_tx'); 
+    window.dispatchEvent(new Event('storage'));
+  },
   processReward: (tx: Transaction) => {
     const user = ReferralService.getUserProfile();
     if (tx.status === TrackerStep.COMPLETED) {

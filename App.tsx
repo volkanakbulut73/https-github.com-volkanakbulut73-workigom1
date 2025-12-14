@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { BottomNav } from './components/BottomNav';
@@ -18,9 +19,17 @@ import { Register } from './pages/Register';
 import { Invite } from './pages/Invite';
 import { Earnings } from './pages/Earnings';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
+import { ReferralService } from './types';
 
 // Main Dashboard Layout (3-Column)
 const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const user = ReferralService.getUserProfile();
+
+  // If user is the default "current-user" (guest/logged out), force login
+  if (user.id === 'current-user') {
+      return <Navigate to="/login" replace />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-900 flex">
       {/* Left Sidebar (Desktop only) */}

@@ -13,6 +13,7 @@ export const Sidebar: React.FC = () => {
     if (isSupabaseConfigured()) {
       await supabase.auth.signOut();
     }
+    ReferralService.logout();
     navigate('/login');
   };
 

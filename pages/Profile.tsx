@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Mail, MapPin, Award, TrendingUp, Star, Camera, ShieldCheck, Heart, Zap, ChevronLeft, LogOut, Database, Wifi, Edit2, Check, X, Loader2 } from 'lucide-react';
@@ -28,6 +29,7 @@ export const Profile: React.FC = () => {
     if (isConnected) {
         await supabase.auth.signOut();
     }
+    ReferralService.logout();
     navigate('/login');
   };
 
