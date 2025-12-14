@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
-import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet, Info, Check, MapPin, Clock } from 'lucide-react';
+import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet, Info, Check, MapPin, Clock, Star, ShieldCheck, Lock, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TrackerStep, Transaction, TransactionService, calculateTransaction, DBService, formatName } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -55,8 +55,8 @@ export const Supporters: React.FC = () => {
        setListings(currentListings => {
            if (currentListings.length === 0) {
                const mockListings: UIListing[] = [
-                  { id: '1', name: 'Ahmet Y.', amount: 1000, location: 'Kadıköy', time: '5 dk önce', rating: 4.8, avatar: 'https://picsum.photos/100/100', description: 'Öğle yemeği acil', type: 'food' },
-                  { id: '2', name: 'Zeynep K.', amount: 1200, location: 'Beşiktaş', time: '12 dk önce', rating: 5.0, avatar: 'https://picsum.photos/101/101', description: 'Migros alışverişi', type: 'market' },
+                  { id: '1', name: 'Ahmet Y.', amount: 1500, location: 'Kadıköy', time: '2 dk önce', rating: 4.9, avatar: 'https://picsum.photos/100/100?random=1', description: 'Akşam yemeği için destek arıyor', type: 'food' },
+                  { id: '2', name: 'Zeynep K.', amount: 1200, location: 'Beşiktaş', time: '12 dk önce', rating: 5.0, avatar: 'https://picsum.photos/101/101?random=2', description: 'Migros alışverişi yapacağım', type: 'market' },
                ];
                return mockListings;
            }
@@ -322,40 +322,90 @@ export const Supporters: React.FC = () => {
                  <div className="col-span-full text-center py-10 text-gray-400 bg-white rounded-2xl border border-gray-100"><p className="text-sm font-medium">Şu an aktif talep bulunmuyor.</p></div>
               ) : (
                  filteredListings.map((listing) => (
-                   <div key={listing.id} onClick={(e) => handleSupportClick(e, listing)} className="bg-white rounded-[1.5rem] p-4 shadow-sm border border-gray-100 hover:shadow-md transition-all cursor-pointer group relative overflow-hidden">
+                   <div key={listing.id} onClick={(e) => handleSupportClick(e, listing)} className="bg-white rounded-[2rem] p-5 border border-[#E9EEF3] shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all cursor-pointer group relative overflow-hidden">
                      
-                     <div className="flex items-center justify-between gap-3 relative z-10">
-                        {/* Left Section: Avatar + Info */}
-                        <div className="flex items-center gap-4 flex-1 min-w-0">
-                            <div className="w-14 h-14 rounded-full p-0.5 bg-white shadow-sm border border-gray-100 shrink-0">
-                                <img src={listing.avatar} className="w-full h-full rounded-full object-cover" alt="User" />
+                     {/* 1. ÜST BAR - GÜVEN + KİMLİK */}
+                     <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="relative">
+                                <img src={listing.avatar} className="w-12 h-12 rounded-full object-cover shadow-sm border border-white" alt="User" />
+                                {/* Online/Active Indicator */}
+                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
                             </div>
-                            <div className="min-w-0">
-                                <h3 className="text-slate-900 font-bold text-lg leading-tight truncate">{listing.name}</h3>
-                                <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
-                                    <div className="flex items-center gap-1 font-bold text-rose-500 shrink-0">
-                                        <Heart size={14} className="fill-rose-500" />
-                                        <span>{listing.rating}</span>
+                            <div>
+                                <h3 className="font-bold text-slate-900 text-sm leading-tight">{listing.name}</h3>
+                                <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5 font-medium">
+                                    <div className="flex items-center text-yellow-500">
+                                        <Star size={10} fill="currentColor" />
+                                        <span className="ml-0.5">{listing.rating}</span>
                                     </div>
-                                    <span className="truncate text-xs font-medium text-gray-500">{listing.description}</span>
-                                </div>
-                                <div className="flex items-center gap-1 text-[10px] text-gray-400 mt-1 font-medium">
-                                    <Clock size={12} />
-                                    {listing.time}
+                                    <span className="w-0.5 h-0.5 bg-gray-300 rounded-full"></span>
+                                    <span>23 işlem</span>
                                 </div>
                             </div>
                         </div>
-
-                        {/* Right Section: Price & Button */}
-                        <div className="flex flex-col items-end gap-2 shrink-0">
-                            <div className="bg-[#14532d] text-white px-5 py-2 rounded-xl font-black text-xl tracking-tight shadow-lg shadow-green-900/20 transform group-hover:scale-105 transition-transform">
-                                {listing.amount} <span className="text-sm font-medium">₺</span>
-                            </div>
-                            <button className="bg-slate-900 text-white px-5 py-2.5 rounded-full font-bold text-xs hover:bg-slate-800 transition-all flex items-center gap-1">
-                                Paylaş <ArrowRight size={14} />
-                            </button>
+                        <div className="flex flex-col items-end gap-1">
+                             <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Aktif
+                             </span>
+                             <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">
+                                <Clock size={10} /> {listing.time}
+                             </span>
                         </div>
                      </div>
+
+                     {/* 2. ORTA ALAN - TALEP MESAJI (DUYGU) */}
+                     <div className="mb-5">
+                        <div className="flex items-start gap-2">
+                            <div className="mt-0.5 p-1.5 bg-orange-50 text-orange-500 rounded-lg shrink-0">
+                                {listing.type === 'food' ? <Utensils size={14} /> : <ShoppingBag size={14} />}
+                            </div>
+                            <p className="text-sm text-slate-700 font-medium leading-relaxed">
+                                {listing.description || `${listing.type === 'food' ? 'Yemek' : 'Market'} harcaması için destek arıyor.`}
+                            </p>
+                        </div>
+                     </div>
+
+                     {/* 3. TUTAR ALANI - GÜÇLÜ VURGULU */}
+                     <div className="bg-gradient-to-r from-[#16A34A] to-[#34D399] rounded-2xl p-4 text-white flex justify-between items-center shadow-lg shadow-emerald-500/20 relative overflow-hidden group-hover:scale-[1.02] transition-transform">
+                        {/* Decorative Blur */}
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-xl"></div>
+                        
+                        <div className="flex flex-col relative z-10">
+                            <span className="text-[10px] font-bold text-emerald-50 uppercase tracking-wider mb-0.5 opacity-90">Yemek Kartı Bakiyesi</span>
+                             <div className="flex items-center gap-2">
+                                 <Wallet size={16} className="text-emerald-100" />
+                                 <span className="font-bold text-xs text-emerald-100">Limit</span>
+                             </div>
+                        </div>
+                        <div className="relative z-10 text-right">
+                             <span className="block text-2xl font-black tracking-tight">{listing.amount} <span className="text-lg">₺</span></span>
+                        </div>
+                     </div>
+
+                     {/* 4. SİSTEM GÜVENCESİ - MİNİ ROZETLER */}
+                     <div className="flex items-center gap-2 mt-4 overflow-x-auto no-scrollbar pb-1">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                            <ShieldCheck size={12} className="text-emerald-500" /> Escrow
+                        </div>
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                            <QrCode size={12} className="text-blue-500" /> QR Ödeme
+                        </div>
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                            <Zap size={12} className="text-yellow-500 fill-yellow-500" /> Hızlı
+                        </div>
+                     </div>
+
+                     {/* 5. CTA - TEK VE NET */}
+                     <div className="mt-5">
+                        <button className="w-full bg-slate-900 hover:bg-slate-800 text-white py-3.5 rounded-xl font-bold text-sm shadow-xl shadow-slate-900/10 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                            Paylaş & Kazan <ArrowRight size={16} />
+                        </button>
+                        <p className="text-center text-[10px] text-gray-400 mt-2 flex items-center justify-center gap-1">
+                            <Lock size={10} /> İşlem Workigom güvencesiyle yapılır
+                        </p>
+                     </div>
+
                    </div>
                  ))
               )}
