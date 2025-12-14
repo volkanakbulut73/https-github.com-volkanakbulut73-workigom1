@@ -675,23 +675,26 @@ export const SwapService = {
 
     if (isSupabaseConfigured()) {
         try {
-            // Added timeout wrapper to prevent hanging
+            // Updated: Using withTimeout (10s) and fallback to empty array/null if successful but empty
+            // This prevents falling back to mocks if DB is connected but empty.
             const { data, error } = await withTimeout(
                 supabase
                     .from('swap_listings')
                     .select('*')
                     .order('created_at', { ascending: false }),
-                5000, // 5s timeout
-                { data: [], error: { message: "Timeout" } } as any // Fallback return if timeout
+                10000, // 10s timeout
+                { data: null, error: { message: "Timeout" } } as any 
             );
 
             if (error) {
                 console.error("Supabase fetch error:", error);
-                // Return empty if RLS blocked or error, to stop loading
+                // Return mocks only on error/timeout, so app isn't blank
                 return mocks; 
             }
 
-            if (data && data.length > 0) {
+            // If data is array (even empty), map it.
+            // This confirms DB connection works, even if 0 items.
+            if (Array.isArray(data)) {
                 return data.map((item: any) => ({
                     id: item.id,
                     title: item.title,
@@ -706,7 +709,7 @@ export const SwapService = {
                 }));
             }
             
-            // If empty data returned from DB, show mocks for demo or empty list
+            // Should not happen if data is returned, but fallback just in case
             return mocks;
         } catch (e) {
             console.error("Swap service exception:", e);
@@ -779,7 +782,7 @@ export const SwapService = {
                  owner_avatar: userAvatar, // Added
                  location: 'İstanbul' // Default location if not asked
              })
-         );
+         ) as any;
          
          if (error) {
              console.error("Insert listing error:", error);
