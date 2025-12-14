@@ -1,4 +1,5 @@
 
+
 // ... existing imports
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
@@ -92,7 +93,7 @@ export interface SwapListing {
   ownerId: string;
   ownerName: string;
   ownerAvatar: string;
-  createdAt: string;
+  createdAt: string; // Changed to string for consistency with DB timestamptz
 }
 
 export interface Message {
@@ -139,6 +140,19 @@ export const formatName = (fullName: string): string => {
 };
 
 const isUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+// Timeout helper to prevent hanging requests
+const withTimeout = <T>(promise: PromiseLike<T>, ms: number = 8000, fallbackValue?: T): Promise<T> => {
+    return Promise.race([
+        Promise.resolve(promise),
+        new Promise<T>((resolve, reject) => 
+            setTimeout(() => {
+                if (fallbackValue !== undefined) resolve(fallbackValue);
+                else reject(new Error('Request timeout'));
+            }, ms)
+        )
+    ]);
+};
 
 export const calculateTransaction = (amount: number, percentage: 20 | 100) => {
   if (percentage === 100) {
@@ -462,9 +476,10 @@ export const DBService = {
               const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
               const filePath = `${fileName}`;
 
-              const { error: uploadError } = await supabase.storage
-                .from('qr-codes')
-                .upload(filePath, file);
+              // Timeout for upload to prevent hanging
+              const { error: uploadError } = await withTimeout(
+                  supabase.storage.from('qr-codes').upload(filePath, file)
+              ) as any;
 
               if (uploadError) throw uploadError;
 
@@ -660,16 +675,19 @@ export const SwapService = {
 
     if (isSupabaseConfigured()) {
         try {
-            // FIX: Removed 'profiles' join because table has its own owner info,
-            // or if we keep join, we must know if FK exists.
-            // Using explicit columns from schema.
-            const { data, error } = await supabase
-                .from('swap_listings')
-                .select('*') // Select all columns directly from the table
-                .order('created_at', { ascending: false });
+            // Added timeout wrapper to prevent hanging
+            const { data, error } = await withTimeout(
+                supabase
+                    .from('swap_listings')
+                    .select('*')
+                    .order('created_at', { ascending: false }),
+                5000, // 5s timeout
+                { data: [], error: { message: "Timeout" } } as any // Fallback return if timeout
+            );
 
             if (error) {
                 console.error("Supabase fetch error:", error);
+                // Return empty if RLS blocked or error, to stop loading
                 return mocks; 
             }
 
@@ -678,16 +696,17 @@ export const SwapService = {
                     id: item.id,
                     title: item.title,
                     description: item.description,
-                    requiredBalance: item.required_balance, // MATCHED DB COLUMN (not item.price)
+                    requiredBalance: item.required_balance, // MATCHED DB COLUMN
                     photoUrl: item.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
                     location: item.location || 'İstanbul',
                     ownerId: item.owner_id,
                     ownerName: item.owner_name || 'Kullanıcı', // MATCHED DB COLUMN
                     ownerAvatar: item.owner_avatar || 'https://picsum.photos/200', // MATCHED DB COLUMN
-                    createdAt: item.created_at
+                    createdAt: item.created_at // string from timestamptz
                 }));
             }
             
+            // If empty data returned from DB, show mocks for demo or empty list
             return mocks;
         } catch (e) {
             console.error("Swap service exception:", e);
@@ -701,23 +720,26 @@ export const SwapService = {
   getListingById: async (id: string): Promise<SwapListing | null> => {
      if (isSupabaseConfigured()) {
          try {
-             const { data, error } = await supabase
+             const { data, error } = await withTimeout(
+                 supabase
                  .from('swap_listings')
                  .select('*')
                  .eq('id', id)
-                 .single();
+                 .single(),
+                 5000
+             ) as any;
              
              if (!error && data) {
                  return {
                     id: data.id,
                     title: data.title,
                     description: data.description,
-                    requiredBalance: data.required_balance, // MATCHED DB COLUMN
+                    requiredBalance: data.required_balance,
                     photoUrl: data.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
                     location: data.location || 'İstanbul',
                     ownerId: data.owner_id,
-                    ownerName: data.owner_name || 'Kullanıcı', // MATCHED DB COLUMN
-                    ownerAvatar: data.owner_avatar || 'https://picsum.photos/200', // MATCHED DB COLUMN
+                    ownerName: data.owner_name || 'Kullanıcı',
+                    ownerAvatar: data.owner_avatar || 'https://picsum.photos/200',
                     createdAt: data.created_at
                  };
              }
@@ -745,16 +767,19 @@ export const SwapService = {
              userAvatar = profile.avatar_url;
          }
 
-         const { error } = await supabase.from('swap_listings').insert({
-             owner_id: user.id,
-             title,
-             description,
-             required_balance: price, // MATCHED DB COLUMN (not 'price')
-             photo_url: photoUrl,
-             owner_name: userName, // Added
-             owner_avatar: userAvatar, // Added
-             location: 'İstanbul' // Default location if not asked
-         });
+         // Wrap in timeout so it doesn't hang indefinitely
+         const { error } = await withTimeout(
+             supabase.from('swap_listings').insert({
+                 owner_id: user.id,
+                 title,
+                 description,
+                 required_balance: price, // MATCHED DB COLUMN
+                 photo_url: photoUrl,
+                 owner_name: userName, // Added
+                 owner_avatar: userAvatar, // Added
+                 location: 'İstanbul' // Default location if not asked
+             })
+         );
          
          if (error) {
              console.error("Insert listing error:", error);
@@ -781,8 +806,11 @@ export const SwapService = {
               const fileExt = file.name.split('.').pop();
               const fileName = `swap/${Math.random().toString(36).substring(2)}.${fileExt}`;
               
-              // Try upload
-              const { error } = await supabase.storage.from('images').upload(fileName, file);
+              // Try upload with timeout
+              const { error } = await withTimeout(
+                  supabase.storage.from('images').upload(fileName, file), 
+                  8000
+              ) as any;
               
               if (error) {
                   console.warn("Supabase Image Upload Error (Bucket might be missing or RLS blocked):", error);

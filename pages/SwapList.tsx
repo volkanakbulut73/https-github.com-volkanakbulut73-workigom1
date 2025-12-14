@@ -158,6 +158,9 @@ export const SwapList: React.FC = () => {
             <div className="flex flex-col items-center justify-center py-20 text-gray-400">
                <Loader2 size={32} className="animate-spin text-primary mb-2" />
                <p className="text-xs">Yükleniyor...</p>
+               <button onClick={() => setLoading(false)} className="mt-4 text-[10px] text-blue-500 underline">
+                   Çok uzun sürdüyse tıklayın
+               </button>
             </div>
          ) : filteredListings.length === 0 ? (
             <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100">
