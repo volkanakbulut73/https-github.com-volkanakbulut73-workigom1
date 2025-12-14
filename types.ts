@@ -660,35 +660,34 @@ export const SwapService = {
 
     if (isSupabaseConfigured()) {
         try {
+            // FIX: Removed 'profiles' join because table has its own owner info,
+            // or if we keep join, we must know if FK exists.
+            // Using explicit columns from schema.
             const { data, error } = await supabase
                 .from('swap_listings')
-                .select('*, profiles(full_name, avatar_url, location)')
+                .select('*') // Select all columns directly from the table
                 .order('created_at', { ascending: false });
 
             if (error) {
                 console.error("Supabase fetch error:", error);
-                return mocks; // Fallback to mocks on error
+                return mocks; 
             }
 
-            // Important: If data exists (even if array is empty due to RLS but call succeeded), check length
-            // If empty, return MOCKS so the user sees something in the UI for demo purposes.
-            // If there IS data, return that.
             if (data && data.length > 0) {
                 return data.map((item: any) => ({
                     id: item.id,
                     title: item.title,
                     description: item.description,
-                    requiredBalance: item.price,
+                    requiredBalance: item.required_balance, // MATCHED DB COLUMN (not item.price)
                     photoUrl: item.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
-                    location: item.profiles?.location || 'İstanbul',
+                    location: item.location || 'İstanbul',
                     ownerId: item.owner_id,
-                    ownerName: item.profiles?.full_name || 'Kullanıcı',
-                    ownerAvatar: item.profiles?.avatar_url || 'https://picsum.photos/200',
+                    ownerName: item.owner_name || 'Kullanıcı', // MATCHED DB COLUMN
+                    ownerAvatar: item.owner_avatar || 'https://picsum.photos/200', // MATCHED DB COLUMN
                     createdAt: item.created_at
                 }));
             }
             
-            // If DB connected but empty (or RLS hides it), return mocks
             return mocks;
         } catch (e) {
             console.error("Swap service exception:", e);
@@ -704,7 +703,7 @@ export const SwapService = {
          try {
              const { data, error } = await supabase
                  .from('swap_listings')
-                 .select('*, profiles(full_name, avatar_url, location)')
+                 .select('*')
                  .eq('id', id)
                  .single();
              
@@ -713,12 +712,12 @@ export const SwapService = {
                     id: data.id,
                     title: data.title,
                     description: data.description,
-                    requiredBalance: data.price,
+                    requiredBalance: data.required_balance, // MATCHED DB COLUMN
                     photoUrl: data.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
-                    location: data.profiles?.location || 'İstanbul',
+                    location: data.location || 'İstanbul',
                     ownerId: data.owner_id,
-                    ownerName: data.profiles?.full_name || 'Kullanıcı',
-                    ownerAvatar: data.profiles?.avatar_url || 'https://picsum.photos/200',
+                    ownerName: data.owner_name || 'Kullanıcı', // MATCHED DB COLUMN
+                    ownerAvatar: data.owner_avatar || 'https://picsum.photos/200', // MATCHED DB COLUMN
                     createdAt: data.created_at
                  };
              }
@@ -735,13 +734,28 @@ export const SwapService = {
     if (isSupabaseConfigured()) {
        const { data: { user } } = await supabase.auth.getUser();
        if (user) {
+         // Get user profile for name/avatar to insert (denormalized)
+         let userName = user.user_metadata?.full_name || 'Kullanıcı';
+         let userAvatar = user.user_metadata?.avatar_url;
+
+         // Try to fetch from profiles first for latest data
+         const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+         if(profile) {
+             userName = profile.full_name;
+             userAvatar = profile.avatar_url;
+         }
+
          const { error } = await supabase.from('swap_listings').insert({
              owner_id: user.id,
              title,
              description,
-             price,
-             photo_url: photoUrl
+             required_balance: price, // MATCHED DB COLUMN (not 'price')
+             photo_url: photoUrl,
+             owner_name: userName, // Added
+             owner_avatar: userAvatar, // Added
+             location: 'İstanbul' // Default location if not asked
          });
+         
          if (error) {
              console.error("Insert listing error:", error);
              throw error;
@@ -772,7 +786,6 @@ export const SwapService = {
               
               if (error) {
                   console.warn("Supabase Image Upload Error (Bucket might be missing or RLS blocked):", error);
-                  // Return a safe fallback so the listing creation DOES NOT HANG
                   return fallbackUrl; 
               }
               
