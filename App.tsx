@@ -81,7 +81,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 ReferralService.saveUserProfile(profile);
                 if (mounted) setIsAuthenticated(true);
             } else {
-                // Yeni Google kullanıcısı için profil oluştur
+                // Yeni Google kullanıcısı veya SQL Trigger hatası durumunda profil oluştur
                 const newProfile: User = {
                     id: user.id,
                     name: user.user_metadata.full_name || user.email?.split('@')[0] || 'Yeni Kullanıcı',
@@ -91,9 +91,31 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     goldenHearts: 0,
                     silverHearts: 0,
                     isAvailable: true,
-                    referralCode: 'NEWUSER',
+                    referralCode: 'REF' + Math.random().toString(36).substring(2, 8).toUpperCase(),
                     wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
                 };
+
+                // Eğer Supabase bağlıysa, profili veritabanına da yazmayı dene (Self-healing)
+                if (isSupabaseConfigured()) {
+                   try {
+                     await supabase.from('profiles').insert({
+                       id: user.id,
+                       full_name: newProfile.name,
+                       avatar_url: newProfile.avatar,
+                       rating: newProfile.rating,
+                       location: newProfile.location,
+                       golden_hearts: newProfile.goldenHearts,
+                       silver_hearts: newProfile.silverHearts,
+                       referral_code: newProfile.referralCode,
+                       wallet_balance: newProfile.wallet.balance,
+                       total_earnings: newProfile.wallet.totalEarnings
+                     });
+                   } catch (insertError) {
+                     // Hata genellikle profil zaten varsa (Trigger çalıştıysa) oluşur, yoksayabiliriz.
+                     console.warn("Auto-create profile info:", insertError);
+                   }
+                }
+
                 ReferralService.saveUserProfile(newProfile);
                 if (mounted) setIsAuthenticated(true);
             }

@@ -21,27 +21,41 @@ export const ChatRooms: React.FC = () => {
 
   // Load Channels
   useEffect(() => {
+    let mounted = true;
+
     const loadChannels = async () => {
-      const data = await DBService.getChannels();
-      setChannels(data);
-      
-      // If we have a channelId from URL, select it
-      if (channelId) {
-          const found = data.find(c => c.id === channelId);
-          if (found) {
-              setActiveChannel(found);
-              setIsMobileMenuOpen(false);
-          } else if (data.length > 0) {
-              // Redirect to first channel if id invalid
-              navigate(`/chatrooms/${data[0].id}`);
-          }
-      } else if (data.length > 0) {
-          // Default to first channel
-          navigate(`/chatrooms/${data[0].id}`);
+      // Safety timeout to ensure loading spinner disappears
+      const timeoutId = setTimeout(() => {
+          if (mounted) setLoading(false);
+      }, 5000);
+
+      try {
+        const data = await DBService.getChannels();
+        if (mounted) {
+            setChannels(data);
+            
+            // If we have a channelId from URL, select it
+            if (channelId) {
+                const found = data.find(c => c.id === channelId);
+                if (found) {
+                    setActiveChannel(found);
+                    setIsMobileMenuOpen(false);
+                } else if (data.length > 0) {
+                    navigate(`/chatrooms/${data[0].id}`);
+                }
+            } else if (data.length > 0) {
+                navigate(`/chatrooms/${data[0].id}`);
+            }
+        }
+      } catch (error) {
+        console.error("Kanal yükleme hatası:", error);
+      } finally {
+        clearTimeout(timeoutId);
+        if (mounted) setLoading(false);
       }
-      setLoading(false);
     };
     loadChannels();
+    return () => { mounted = false; };
   }, [channelId, navigate]);
 
   // Load Messages & Subscription
@@ -49,36 +63,36 @@ export const ChatRooms: React.FC = () => {
       if (!activeChannel) return;
 
       const loadMessages = async () => {
-          const msgs = await DBService.getChannelMessages(activeChannel.id);
-          setMessages(msgs);
-          scrollToBottom('auto');
+          try {
+             const msgs = await DBService.getChannelMessages(activeChannel.id);
+             setMessages(msgs);
+             scrollToBottom('auto');
+          } catch (e) {
+             console.error("Mesaj yükleme hatası", e);
+          }
       };
       loadMessages();
 
       // Realtime Subscription
       let channelSub: any;
       if (isSupabaseConfigured()) {
-          channelSub = supabase.channel(`public:channel_messages:channel_id=eq.${activeChannel.id}`)
-              .on('postgres_changes', { 
-                  event: 'INSERT', 
-                  schema: 'public', 
-                  table: 'channel_messages',
-                  filter: `channel_id=eq.${activeChannel.id}`
-              }, async (payload) => {
-                  const newMsgRow = payload.new;
-                  // We need to fetch sender details as the realtime payload only has FKs usually
-                  // For optimized apps, you'd send this data in payload, but for now we re-fetch or assume
-                  // Ideally we fetch the single message with profile join.
-                  
-                  // For demo/simplicity, we just assume or quick fetch if possible, 
-                  // or just append if we trust the payload structure matches.
-                  // Since we defined ChannelMessage with senderName, we might be missing it in raw payload.
-                  // Let's do a quick hack: fetch the fresh message list or just this message.
-                  const freshMsgs = await DBService.getChannelMessages(activeChannel.id);
-                  setMessages(freshMsgs);
-                  scrollToBottom('smooth');
-              })
-              .subscribe();
+          try {
+              channelSub = supabase.channel(`public:channel_messages:channel_id=eq.${activeChannel.id}`)
+                  .on('postgres_changes', { 
+                      event: 'INSERT', 
+                      schema: 'public', 
+                      table: 'channel_messages',
+                      filter: `channel_id=eq.${activeChannel.id}`
+                  }, async (payload) => {
+                      // Fetch fresh messages to ensure we have sender details
+                      const freshMsgs = await DBService.getChannelMessages(activeChannel.id);
+                      setMessages(freshMsgs);
+                      scrollToBottom('smooth');
+                  })
+                  .subscribe();
+          } catch (e) {
+              console.error("Realtime subscription error", e);
+          }
       }
 
       return () => {
@@ -114,16 +128,9 @@ export const ChatRooms: React.FC = () => {
 
       try {
           await DBService.sendChannelMessage(activeChannel.id, content);
-          // If using realtime, the real message comes back and replaces/deduplicates usually
-          // But for mock/local, we just leave it.
-          if (!isSupabaseConfigured()) {
-             // Keep it
-          } else {
-             // In real DB scenario, subscription updates it.
-          }
       } catch (error) {
           console.error(error);
-          // Revert on failure
+          // Optional: Show error to user or revert optimistic update
       }
   };
 
@@ -153,7 +160,13 @@ export const ChatRooms: React.FC = () => {
           
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
              {loading ? (
-                 <div className="text-center p-4 text-slate-500 text-xs">Odalar yükleniyor...</div>
+                 <div className="text-center p-4 text-slate-500 text-xs flex flex-col items-center">
+                    <span className="mb-2">Odalar yükleniyor...</span>
+                    {/* Fallback button if stuck */}
+                    <button onClick={() => setLoading(false)} className="text-xs text-emerald-500 underline">
+                        Yüklenmezse tıkla
+                    </button>
+                 </div>
              ) : (
                  channels.map(channel => (
                      <button
@@ -191,7 +204,7 @@ export const ChatRooms: React.FC = () => {
                  <Menu size={24} />
              </button>
              <div>
-                 <h3 className="font-bold text-white">{activeChannel?.name}</h3>
+                 <h3 className="font-bold text-white">{activeChannel?.name || 'Sohbet'}</h3>
                  <p className="text-[10px] text-slate-400">{activeChannel?.description}</p>
              </div>
          </div>
@@ -200,13 +213,13 @@ export const ChatRooms: React.FC = () => {
          <div className="hidden md:flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-10">
              <div>
                  <h3 className="font-bold text-lg text-white flex items-center gap-2">
-                    {activeChannel?.name}
+                    {activeChannel?.name || 'Sohbet Odası'}
                  </h3>
                  <p className="text-xs text-slate-400">{activeChannel?.description}</p>
              </div>
              <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-950 px-3 py-1.5 rounded-full border border-slate-800">
                  <Users size={14} className="text-emerald-500" />
-                 <span>{activeChannel?.usersOnline} Çevrimiçi</span>
+                 <span>{activeChannel?.usersOnline || 0} Çevrimiçi</span>
              </div>
          </div>
 
@@ -257,12 +270,13 @@ export const ChatRooms: React.FC = () => {
                     type="text" 
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder={`#${activeChannel?.name.replace('#','')} kanalına mesaj yaz...`}
+                    placeholder={activeChannel ? `#${activeChannel.name.replace('#','')} kanalına mesaj yaz...` : 'Mesaj yaz...'}
                     className="flex-1 bg-transparent px-4 py-2 text-sm text-white placeholder-slate-500 outline-none"
+                    disabled={!activeChannel}
                  />
                  <button 
                     type="submit" 
-                    disabled={!newMessage.trim()}
+                    disabled={!newMessage.trim() || !activeChannel}
                     className="p-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                  >
                      <Send size={18} />

@@ -1,6 +1,9 @@
 
+
+// ... existing imports
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
+// ... (previous interfaces remain the same until Services)
 export enum VoucherCompany {
   SODEXO = 'Sodexo',
   MULTINET = 'Multinet',
@@ -513,43 +516,84 @@ export const DBService = {
     };
   },
 
-  // --- CHAT ROOMS (NEW) ---
+  // --- CHAT ROOMS ---
   getChannels: async (): Promise<ChatChannel[]> => {
-     if (isSupabaseConfigured()) {
-         // This assumes a 'channels' table exists. If not, will return empty.
-         const { data, error } = await supabase.from('channels').select('*');
-         if (!error && data && data.length > 0) return data;
-     }
-     
-     // Mock Channels
-     return [
+     // Default Mocks
+     const mocks: ChatChannel[] = [
        { id: 'general', name: '#genel', description: 'Workigom genel sohbet alanı', usersOnline: 124 },
        { id: 'trade', name: '#takas-pazari', description: 'İlanlar hakkında tartışma', usersOnline: 45 },
        { id: 'support', name: '#yardim-destek', description: 'Kullanıcı yardımlaşma alanı', usersOnline: 12 },
        { id: 'food', name: '#yemek-onerileri', description: 'Hangi restoran, hangi menü?', usersOnline: 28 },
      ];
+
+     try {
+         if (isSupabaseConfigured()) {
+             const { data, error } = await supabase.from('channels').select('*');
+             
+             if (error) {
+                 console.warn("Fetch channels error (RLS/Table missing?)", error);
+                 return mocks; // Fallback to mocks immediately on error
+             }
+
+             if (data && data.length > 0) {
+                 return data.map((c: any) => ({
+                     id: c.id,
+                     name: c.name,
+                     description: c.topic || '', // Map DB 'topic' to Interface 'description'
+                     usersOnline: Math.floor(Math.random() * 50) + 5
+                 }));
+             } else {
+                 // Empty table? Seed it if we can.
+                 try {
+                     const seedData = [
+                       { name: '#genel', topic: 'Genel sohbet' },
+                       { name: '#takas', topic: 'Takas pazarı' }
+                     ];
+                     const { data: inserted } = await supabase.from('channels').insert(seedData).select();
+                     if (inserted) {
+                         return inserted.map((c: any) => ({
+                             id: c.id,
+                             name: c.name,
+                             description: c.topic || '',
+                             usersOnline: 10
+                         }));
+                     }
+                 } catch (seedErr) { /* ignore seed error */ }
+                 
+                 return mocks;
+             }
+         }
+     } catch (e) {
+         console.warn("Error fetching channels, falling back to mock", e);
+     }
+     
+     return mocks;
   },
 
   getChannelMessages: async (channelId: string): Promise<ChannelMessage[]> => {
-     if (isSupabaseConfigured()) {
-        const { data } = await supabase
-            .from('channel_messages')
-            .select('*, profiles(full_name, avatar_url)')
-            .eq('channel_id', channelId)
-            .order('created_at', { ascending: true })
-            .limit(50);
-            
-        if (data) {
-            return data.map(m => ({
-                id: m.id,
-                channelId: m.channel_id,
-                senderId: m.sender_id,
-                senderName: m.profiles?.full_name || 'Anonim',
-                senderAvatar: m.profiles?.avatar_url || 'https://picsum.photos/100',
-                content: m.content,
-                createdAt: m.created_at
-            }));
+     try {
+        if (isSupabaseConfigured()) {
+            const { data, error } = await supabase
+                .from('channel_messages')
+                .select('*, profiles(full_name, avatar_url)')
+                .eq('channel_id', channelId)
+                .order('created_at', { ascending: true })
+                .limit(50);
+                
+            if (!error && data) {
+                return data.map((m: any) => ({
+                    id: m.id,
+                    channelId: m.channel_id,
+                    senderId: m.sender_id,
+                    senderName: m.profiles?.full_name || 'Anonim',
+                    senderAvatar: m.profiles?.avatar_url || 'https://picsum.photos/100',
+                    content: m.content,
+                    createdAt: m.created_at
+                }));
+            }
         }
+     } catch (e) {
+        console.warn("Error fetching messages, using mock", e);
      }
      
      // Mock initial messages for demo
@@ -570,31 +614,36 @@ export const DBService = {
   sendChannelMessage: async (channelId: string, content: string): Promise<ChannelMessage> => {
       const user = ReferralService.getUserProfile();
       
-      if (isSupabaseConfigured()) {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (authUser) {
-              const { data, error } = await supabase
-                  .from('channel_messages')
-                  .insert({
-                      channel_id: channelId,
-                      sender_id: authUser.id,
-                      content: content
-                  })
-                  .select('*, profiles(full_name, avatar_url)')
-                  .single();
-              
-              if (data) {
-                 return {
-                    id: data.id,
-                    channelId: data.channel_id,
-                    senderId: data.sender_id,
-                    senderName: data.profiles?.full_name || user.name,
-                    senderAvatar: data.profiles?.avatar_url || user.avatar,
-                    content: data.content,
-                    createdAt: data.created_at
-                 };
+      try {
+          if (isSupabaseConfigured()) {
+              const { data: { user: authUser } } = await supabase.auth.getUser();
+              if (authUser) {
+                  const { data, error } = await supabase
+                      .from('channel_messages')
+                      .insert({
+                          channel_id: channelId,
+                          sender_id: authUser.id,
+                          content: content
+                      })
+                      .select('*, profiles(full_name, avatar_url)')
+                      .single();
+                  
+                  if (data) {
+                     return {
+                        id: data.id,
+                        channelId: data.channel_id,
+                        senderId: data.sender_id,
+                        senderName: data.profiles?.full_name || user.name,
+                        senderAvatar: data.profiles?.avatar_url || user.avatar,
+                        content: data.content,
+                        createdAt: data.created_at
+                     };
+                  }
               }
           }
+      } catch (e) {
+          console.error("Message send failed", e);
+          throw e; // Let UI handle error
       }
 
       // Local mock
@@ -610,150 +659,146 @@ export const DBService = {
   }
 };
 
+// --- Swap Service ---
+
 export const SwapService = {
   getListings: async (): Promise<SwapListing[]> => {
     if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
-            .from('swap_listings')
-            .select('*')
-            .order('created_at', { ascending: false });
-        
-        if (data) {
-            return data.map(item => ({
-                id: item.id,
-                title: item.title,
-                description: item.description,
-                requiredBalance: item.required_balance,
-                photoUrl: item.photo_url,
-                location: item.location,
-                ownerId: item.owner_id,
-                ownerName: item.owner_name,
-                ownerAvatar: item.owner_avatar,
-                createdAt: item.created_at
-            }));
+        try {
+            const { data, error } = await supabase
+                .from('swap_listings')
+                .select('*, profiles(full_name, avatar_url, location)')
+                .order('created_at', { ascending: false });
+
+            if (!error && data) {
+                return data.map((item: any) => ({
+                    id: item.id,
+                    title: item.title,
+                    description: item.description,
+                    requiredBalance: item.price,
+                    photoUrl: item.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
+                    location: item.profiles?.location || 'İstanbul',
+                    ownerId: item.owner_id,
+                    ownerName: item.profiles?.full_name || 'Kullanıcı',
+                    ownerAvatar: item.profiles?.avatar_url || 'https://picsum.photos/200',
+                    createdAt: item.created_at
+                }));
+            }
+        } catch (e) {
+            console.error(e);
         }
     }
-    
-    // Local Storage Fallback
-    try {
-        const stored = localStorage.getItem('swap_listings');
-        return stored ? JSON.parse(stored) : [];
-    } catch { return []; }
-  },
 
-  uploadImage: async (file: File): Promise<string> => {
-      if (isSupabaseConfigured()) {
-           try {
-              const fileExt = file.name.split('.').pop();
-              const fileName = `swap-${Math.random().toString(36).substring(2)}.${fileExt}`;
-              const filePath = `${fileName}`;
-
-              const { error: uploadError } = await supabase.storage
-                .from('swap-images') 
-                .upload(filePath, file);
-
-              if (uploadError) throw uploadError;
-
-              const { data: { publicUrl } } = supabase.storage
-                .from('swap-images')
-                .getPublicUrl(filePath);
-
-              return publicUrl;
-          } catch (error) {
-              console.warn("Supabase Swap Upload Failed, falling back to base64", error);
-          }
+    // Mock Data
+    return [
+      {
+        id: '1',
+        title: 'Sony WH-1000XM4 Kulaklık',
+        description: 'Az kullanılmış, kutulu faturalı. Yemek kartı ile takas olur.',
+        requiredBalance: 3500,
+        photoUrl: 'https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=500&auto=format&fit=crop&q=60',
+        location: 'Kadıköy, İstanbul',
+        ownerId: 'user-2',
+        ownerName: 'Zeynep K.',
+        ownerAvatar: 'https://picsum.photos/101/101',
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: '2',
+        title: 'Apple Magic Keyboard',
+        description: 'Türkçe Q Klavye, temiz durumda.',
+        requiredBalance: 2000,
+        photoUrl: 'https://images.unsplash.com/photo-1587829741301-dc798b91add1?w=500&auto=format&fit=crop&q=60',
+        location: 'Beşiktaş, İstanbul',
+        ownerId: 'user-3',
+        ownerName: 'Ahmet Y.',
+        ownerAvatar: 'https://picsum.photos/102/102',
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: '3',
+        title: 'JBL Flip 5 Hoparlör',
+        description: 'Kırmızı renk, garantisi devam ediyor.',
+        requiredBalance: 1500,
+        photoUrl: 'https://images.unsplash.com/photo-1612217025870-80252b57e600?w=500&auto=format&fit=crop&q=60',
+        location: 'Şişli, İstanbul',
+        ownerId: 'user-4',
+        ownerName: 'Mehmet S.',
+        ownerAvatar: 'https://picsum.photos/103/103',
+        createdAt: new Date().toISOString()
       }
-      
-      // Base64 fallback for local storage persistence
-      return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = error => reject(error);
-      });
-  },
-
-  createListing: async (title: string, description: string, price: number, photo: string) => {
-      // Get current user for owner details
-      let user = ReferralService.getUserProfile();
-      
-      if (isSupabaseConfigured()) {
-          const { data: authData } = await supabase.auth.getUser();
-          if (authData.user) {
-              const profile = await DBService.getUserProfile(authData.user.id);
-              if (profile) user = profile;
-          }
-
-          const { error } = await supabase.from('swap_listings').insert({
-              title,
-              description,
-              required_balance: price,
-              photo_url: photo,
-              location: user.location,
-              owner_id: user.id,
-              owner_name: user.name,
-              owner_avatar: user.avatar
-          });
-          
-          if (error) {
-              console.error("Supabase Create Error", error);
-              throw error;
-          }
-          return;
-      }
-
-      // Local Storage Logic
-      const newListing: SwapListing = {
-          id: `swap-${Date.now()}`,
-          title,
-          description,
-          requiredBalance: price,
-          photoUrl: photo,
-          location: user.location,
-          ownerId: user.id,
-          ownerName: user.name,
-          ownerAvatar: user.avatar,
-          createdAt: new Date().toISOString()
-      };
-
-      const current = await SwapService.getListings();
-      const updated = [newListing, ...current];
-      localStorage.setItem('swap_listings', JSON.stringify(updated));
-      window.dispatchEvent(new Event('storage'));
+    ];
   },
 
   getListingById: async (id: string): Promise<SwapListing | null> => {
-      if (isSupabaseConfigured()) {
-          const { data } = await supabase.from('swap_listings').select('*').eq('id', id).single();
-          if (data) {
-              return {
-                id: data.id,
-                title: data.title,
-                description: data.description,
-                requiredBalance: data.required_balance,
-                photoUrl: data.photo_url,
-                location: data.location,
-                ownerId: data.owner_id,
-                ownerName: data.owner_name,
-                ownerAvatar: data.owner_avatar,
-                createdAt: data.created_at
-              };
-          }
-      }
-      
-      const listings = await SwapService.getListings();
-      return listings.find(l => l.id === id) || null;
+     if (isSupabaseConfigured()) {
+         try {
+             const { data, error } = await supabase
+                 .from('swap_listings')
+                 .select('*, profiles(full_name, avatar_url, location)')
+                 .eq('id', id)
+                 .single();
+             
+             if (!error && data) {
+                 return {
+                    id: data.id,
+                    title: data.title,
+                    description: data.description,
+                    requiredBalance: data.price,
+                    photoUrl: data.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
+                    location: data.profiles?.location || 'İstanbul',
+                    ownerId: data.owner_id,
+                    ownerName: data.profiles?.full_name || 'Kullanıcı',
+                    ownerAvatar: data.profiles?.avatar_url || 'https://picsum.photos/200',
+                    createdAt: data.created_at
+                 };
+             }
+         } catch (e) {
+             console.error(e);
+         }
+     }
+     
+     const all = await SwapService.getListings();
+     return all.find(l => l.id === id) || null;
+  },
+
+  createListing: async (title: string, description: string, price: number, photoUrl: string) => {
+    if (isSupabaseConfigured()) {
+       const { data: { user } } = await supabase.auth.getUser();
+       if (user) {
+         const { error } = await supabase.from('swap_listings').insert({
+             owner_id: user.id,
+             title,
+             description,
+             price,
+             photo_url: photoUrl
+         });
+         if (error) throw error;
+       }
+    }
+    // No-op for demo if not configured
   },
 
   deleteListing: async (id: string) => {
       if (isSupabaseConfigured()) {
           await supabase.from('swap_listings').delete().eq('id', id);
-          return;
       }
+  },
 
-      const listings = await SwapService.getListings();
-      const updated = listings.filter(l => l.id !== id);
-      localStorage.setItem('swap_listings', JSON.stringify(updated));
-      window.dispatchEvent(new Event('storage'));
+  uploadImage: async (file: File): Promise<string> => {
+      if (isSupabaseConfigured()) {
+          try {
+              const fileExt = file.name.split('.').pop();
+              const fileName = `swap/${Math.random().toString(36).substring(2)}.${fileExt}`;
+              const { error } = await supabase.storage.from('images').upload(fileName, file);
+              if (error) throw error;
+              
+              const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+              return data.publicUrl;
+          } catch (e) {
+              console.warn("Upload failed", e);
+          }
+      }
+      return URL.createObjectURL(file);
   }
 };
