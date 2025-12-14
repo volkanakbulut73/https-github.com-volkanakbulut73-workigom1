@@ -90,7 +90,7 @@ export const Register: React.FC = () => {
                     prompt: 'consent',
                     client_id: '444278057283-6dukljlihlpau48m625o2foulcnc04b3.apps.googleusercontent.com'
                 },
-                redirectTo: window.location.origin,
+                redirectTo: `${window.location.origin}/app`,
             },
         });
         if (error) throw error;
@@ -223,4 +223,3 @@ export const Register: React.FC = () => {
       </div>
     </div>
   );
-};
