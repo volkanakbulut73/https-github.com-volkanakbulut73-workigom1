@@ -630,7 +630,7 @@ export const DBService = {
 
 export const SwapService = {
   getListings: async (): Promise<SwapListing[]> => {
-    // Demo mocks just in case
+    // Demo mocks
     const mocks: SwapListing[] = [
       {
         id: '1',
@@ -665,10 +665,15 @@ export const SwapService = {
                 .select('*, profiles(full_name, avatar_url, location)')
                 .order('created_at', { ascending: false });
 
-            // CRITICAL FIX: If DB is connected and returns data (even if length is 0), use it.
-            // Don't fall back to mocks unless there's an actual ERROR.
-            // If data exists, map it.
-            if (!error && data) {
+            if (error) {
+                console.error("Supabase fetch error:", error);
+                return mocks; // Fallback to mocks on error
+            }
+
+            // Important: If data exists (even if array is empty due to RLS but call succeeded), check length
+            // If empty, return MOCKS so the user sees something in the UI for demo purposes.
+            // If there IS data, return that.
+            if (data && data.length > 0) {
                 return data.map((item: any) => ({
                     id: item.id,
                     title: item.title,
@@ -682,19 +687,15 @@ export const SwapService = {
                     createdAt: item.created_at
                 }));
             }
-            if (error) {
-                console.error("Supabase error fetching listings:", error);
-                // On error, we might fall back to mocks for demo purposes or return empty
-                // For this user request, better to return mocks if DB fails entirely
-                return mocks;
-            }
+            
+            // If DB connected but empty (or RLS hides it), return mocks
+            return mocks;
         } catch (e) {
-            console.error(e);
+            console.error("Swap service exception:", e);
             return mocks;
         }
     }
 
-    // Return mocks if DB is empty or not configured
     return mocks;
   },
 

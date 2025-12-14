@@ -15,22 +15,36 @@ export const SwapList: React.FC = () => {
 
   const loadListings = async () => {
     setLoading(true);
+    let isMounted = true;
+
+    // Safety timeout to force stop loading after 5 seconds even if DB hangs
+    const timeout = setTimeout(() => {
+        if (isMounted) setLoading(false);
+    }, 5000);
+
     try {
       const data = await SwapService.getListings();
-      if (Array.isArray(data)) {
-        setListings(data);
-      } else {
-        setListings([]);
+      if (isMounted) {
+        if (Array.isArray(data)) {
+            setListings(data);
+        } else {
+            setListings([]);
+        }
       }
     } catch (e) {
-      console.error(e);
-      setListings([]);
+      console.error("List load error", e);
+      if (isMounted) setListings([]);
     } finally {
-      setLoading(false);
+      clearTimeout(timeout);
+      if (isMounted) setLoading(false);
     }
   };
 
-  useEffect(() => { loadListings(); }, []);
+  useEffect(() => { 
+      let isMounted = true;
+      loadListings();
+      return () => { isMounted = false; };
+  }, []);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation(); // Kartın detayına gitmesini engelle
