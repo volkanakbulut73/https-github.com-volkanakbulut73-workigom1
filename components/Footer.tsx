@@ -22,17 +22,17 @@ export const Footer: React.FC = () => {
           <div>
             <h3 className="font-bold text-lg mb-4">Platform</h3>
             <ul className="space-y-2 text-slate-400 text-sm">
-              <li><a href="#" className="hover:text-emerald-400 transition-colors">Nasıl Çalışır?</a></li>
-              <li><a href="#" className="hover:text-emerald-400 transition-colors">Güvenlik</a></li>
-              <li><a href="#" className="hover:text-emerald-400 transition-colors">Topluluk Kuralları</a></li>
+              <li><Link to="/" className="hover:text-emerald-400 transition-colors">Nasıl Çalışır?</Link></li>
+              <li><Link to="/" className="hover:text-emerald-400 transition-colors">Güvenlik</Link></li>
+              <li><Link to="/" className="hover:text-emerald-400 transition-colors">Topluluk Kuralları</Link></li>
             </ul>
           </div>
 
           <div>
             <h3 className="font-bold text-lg mb-4">Kurumsal</h3>
             <ul className="space-y-2 text-slate-400 text-sm">
-              <li><a href="#" className="hover:text-emerald-400 transition-colors">Hakkımızda</a></li>
-              <li><a href="#" className="hover:text-emerald-400 transition-colors">İletişim</a></li>
+              <li><Link to="/" className="hover:text-emerald-400 transition-colors">Hakkımızda</Link></li>
+              <li><Link to="/" className="hover:text-emerald-400 transition-colors">İletişim</Link></li>
               <li><Link to="/privacy" className="hover:text-emerald-400 transition-colors">Gizlilik Politikası</Link></li>
             </ul>
           </div>
