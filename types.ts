@@ -1,5 +1,4 @@
 
-
 // ... existing imports
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
@@ -675,26 +674,21 @@ export const SwapService = {
 
     if (isSupabaseConfigured()) {
         try {
-            // Updated: Using withTimeout (10s) and fallback to empty array/null if successful but empty
-            // This prevents falling back to mocks if DB is connected but empty.
-            const { data, error } = await withTimeout(
-                supabase
-                    .from('swap_listings')
-                    .select('*')
-                    .order('created_at', { ascending: false }),
-                10000, // 10s timeout
-                { data: null, error: { message: "Timeout" } } as any 
-            );
+            // Updated: Removed withTimeout to avoid masking real DB errors.
+            // If the table 'swap_listings' exists, this should fetch.
+            // If RLS is enabled and no policy, it returns empty array [] (not error).
+            const { data, error } = await supabase
+                .from('swap_listings')
+                .select('*')
+                .order('created_at', { ascending: false });
 
             if (error) {
-                console.error("Supabase fetch error:", error);
-                // Return mocks only on error/timeout, so app isn't blank
+                console.error("Supabase fetch error details:", JSON.stringify(error, null, 2));
+                // Return mocks only on error, so app isn't blank
                 return mocks; 
             }
 
-            // If data is array (even empty), map it.
-            // This confirms DB connection works, even if 0 items.
-            if (Array.isArray(data)) {
+            if (data && Array.isArray(data)) {
                 return data.map((item: any) => ({
                     id: item.id,
                     title: item.title,
@@ -709,7 +703,6 @@ export const SwapService = {
                 }));
             }
             
-            // Should not happen if data is returned, but fallback just in case
             return mocks;
         } catch (e) {
             console.error("Swap service exception:", e);
@@ -723,14 +716,11 @@ export const SwapService = {
   getListingById: async (id: string): Promise<SwapListing | null> => {
      if (isSupabaseConfigured()) {
          try {
-             const { data, error } = await withTimeout(
-                 supabase
+             const { data, error } = await supabase
                  .from('swap_listings')
                  .select('*')
                  .eq('id', id)
-                 .single(),
-                 5000
-             ) as any;
+                 .single();
              
              if (!error && data) {
                  return {
@@ -745,6 +735,8 @@ export const SwapService = {
                     ownerAvatar: data.owner_avatar || 'https://picsum.photos/200',
                     createdAt: data.created_at
                  };
+             } else if (error) {
+                 console.error("Fetch single listing error:", JSON.stringify(error));
              }
          } catch (e) {
              console.error(e);
