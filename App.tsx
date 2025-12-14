@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { BottomNav } from './components/BottomNav';
 import { WebNavbar } from './components/WebNavbar';
@@ -19,14 +19,120 @@ import { Register } from './pages/Register';
 import { Invite } from './pages/Invite';
 import { Earnings } from './pages/Earnings';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
-import { ReferralService } from './types';
+import { ReferralService, DBService, User } from './types'; 
+import { supabase, isSupabaseConfigured } from './lib/supabase';
+import { Loader2 } from 'lucide-react';
 
-// Main Dashboard Layout (3-Column)
+// Main Dashboard Layout (3-Column) with Auth Check
 const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const user = ReferralService.getUserProfile();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // If user is the default "current-user" (guest/logged out), force login
-  if (user.id === 'current-user') {
+  useEffect(() => {
+    let mounted = true;
+
+    const initializeAuth = async () => {
+      // 1. Önce LocalStorage kontrolü (Hız için)
+      const localUser = ReferralService.getUserProfile();
+      if (localUser.id !== 'current-user') {
+          if (mounted) {
+            setIsAuthenticated(true);
+            setIsLoading(false);
+          }
+          return;
+      }
+
+      // 2. Supabase Oturum Kontrolü
+      if (isSupabaseConfigured()) {
+          // Google Login sonrası URL'de hash var mı? Varsa Supabase'in işlemesini bekle.
+          // Bu kontrol "Redirect Loop" sorununu önler.
+          const isOAuthRedirect = window.location.hash && window.location.hash.includes('access_token');
+          
+          if (isOAuthRedirect) {
+              // Yükleniyor durumunda kal, onAuthStateChange olayı (SIGNED_IN) birazdan tetiklenecek.
+              return;
+          }
+
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session?.user) {
+             await handleUserSession(session.user);
+          } else {
+             // Oturum yok ve OAuth redirect değilse, giriş sayfasına at.
+             if (mounted) {
+                 setIsAuthenticated(false);
+                 setIsLoading(false);
+             }
+          }
+      } else {
+          // Supabase yoksa ve local user yoksa (Demo dışı)
+          if (mounted) {
+             setIsAuthenticated(false);
+             setIsLoading(false);
+          }
+      }
+    };
+
+    const handleUserSession = async (user: any) => {
+        try {
+            const profile = await DBService.getUserProfile(user.id);
+            if (profile) {
+                ReferralService.saveUserProfile(profile);
+                if (mounted) setIsAuthenticated(true);
+            } else {
+                // Yeni Google kullanıcısı için profil oluştur
+                const newProfile: User = {
+                    id: user.id,
+                    name: user.user_metadata.full_name || user.email?.split('@')[0] || 'Yeni Kullanıcı',
+                    avatar: user.user_metadata.avatar_url || 'https://picsum.photos/200',
+                    rating: 5.0,
+                    location: 'İstanbul',
+                    goldenHearts: 0,
+                    silverHearts: 0,
+                    isAvailable: true,
+                    referralCode: 'NEWUSER',
+                    wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
+                };
+                ReferralService.saveUserProfile(newProfile);
+                if (mounted) setIsAuthenticated(true);
+            }
+        } catch (e) {
+            console.error("Profile load error", e);
+            if (mounted) setIsAuthenticated(false);
+        } finally {
+            if (mounted) setIsLoading(false);
+        }
+    };
+
+    // Oturum değişikliklerini (OAuth Login dahil) dinle
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+            await handleUserSession(session.user);
+        } else if (event === 'SIGNED_OUT') {
+            if (mounted) setIsAuthenticated(false);
+        }
+    });
+
+    initializeAuth();
+
+    return () => {
+        mounted = false;
+        subscription.unsubscribe();
+    };
+  }, []);
+
+  if (isLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="flex flex-col items-center gap-3">
+                <Loader2 className="animate-spin text-slate-900" size={32} />
+                <p className="text-sm font-bold text-gray-500">Oturum açılıyor...</p>
+            </div>
+        </div>
+      );
+  }
+
+  if (!isAuthenticated) {
       return <Navigate to="/login" replace />;
   }
 

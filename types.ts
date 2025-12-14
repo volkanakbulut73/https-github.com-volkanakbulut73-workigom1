@@ -130,14 +130,6 @@ export const calculateTransaction = (amount: number, percentage: 20 | 100) => {
     };
   }
   
-  // 20% case (Standart Takas Modeli)
-  // Toplam Tutar: 1000 TL
-  // Seeker (Talep Eden) %80 öder: 800 TL (Nakit)
-  // Supporter (Destekçi) %100 çeker (QR ile): 1000 TL
-  // Platform Komisyonu %5 (Toplam üzerinden): 50 TL
-  // Destekçiye İade Edilen: 800 TL (Seeker'dan gelen) - 50 TL (Komisyon) = 750 TL
-  // Destekçinin "Maliyeti/Katkısı": 1000 (Kart) - 750 (Nakit) = 250 TL (%20 indirim + %5 komisyon)
-
   const seekerPayment = amount * 0.8; // User pays 80% in cash
   const supportAmount = amount; // Supporter pays full amount via QR
   const platformFee = amount * 0.05; // 5% fee on total amount
@@ -185,8 +177,7 @@ export const ReferralService = {
   },
   logout: () => {
     localStorage.removeItem('user_profile');
-    // We can also clear active transaction session data if desired
-    // localStorage.removeItem('active_tx'); 
+    localStorage.removeItem('active_tx'); 
     window.dispatchEvent(new Event('storage'));
   },
   processReward: (tx: Transaction) => {
@@ -228,27 +219,36 @@ export const TransactionService = {
 export const DBService = {
   getUserProfile: async (id: string): Promise<User | null> => {
     if (isSupabaseConfigured()) {
-       const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
-       if (data && !error) {
-           return {
-             id: data.id,
-             name: data.full_name,
-             avatar: data.avatar_url || 'https://picsum.photos/200',
-             rating: data.rating || 5.0,
-             location: 'İstanbul', // Default if missing
-             goldenHearts: 0,
-             silverHearts: 0,
-             isAvailable: true,
-             referralCode: 'REF',
-             wallet: {
-               balance: data.wallet_balance || 0,
-               totalEarnings: 0,
-               pendingBalance: 0
-             }
-           };
+       try {
+           const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
+           if (error && error.code !== 'PGRST116') { // Ignore 'not found' error
+               console.warn("Profile fetch error:", error);
+           }
+           
+           if (data) {
+               return {
+                 id: data.id,
+                 name: data.full_name,
+                 avatar: data.avatar_url || 'https://picsum.photos/200',
+                 rating: data.rating || 5.0,
+                 location: 'İstanbul', // Default if missing
+                 goldenHearts: 0,
+                 silverHearts: 0,
+                 isAvailable: true,
+                 referralCode: 'REF',
+                 wallet: {
+                   balance: data.wallet_balance || 0,
+                   totalEarnings: 0,
+                   pendingBalance: 0
+                 }
+               };
+           }
+       } catch (e) {
+           console.error(e);
        }
     }
-    return ReferralService.getUserProfile();
+    // Return null if not found in DB so we can handle creation
+    return null;
   },
 
   getUnreadCounts: async (id: string) => {
