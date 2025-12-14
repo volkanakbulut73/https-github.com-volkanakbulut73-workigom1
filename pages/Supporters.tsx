@@ -1,16 +1,15 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
-import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet, Info, Check } from 'lucide-react';
+import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet, Info, Check, MapPin, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TrackerStep, Transaction, TransactionService, calculateTransaction, DBService, formatName } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const FILTERS = [
   { id: 'all', label: 'Tümü', icon: null },
-  { id: 'food', label: 'Yemek', icon: <Utensils size={10} /> },
-  { id: 'market', label: 'Market', icon: <ShoppingBag size={10} /> },
+  { id: 'food', label: 'Yemek', icon: <Utensils size={14} /> },
+  { id: 'market', label: 'Market', icon: <ShoppingBag size={14} /> },
 ];
 
 interface UIListing {
@@ -56,8 +55,8 @@ export const Supporters: React.FC = () => {
        setListings(currentListings => {
            if (currentListings.length === 0) {
                const mockListings: UIListing[] = [
-                  { id: '1', name: 'Ahmet Y.', amount: 1000, location: 'Kadıköy', time: '5 dk', rating: 4.8, avatar: 'https://picsum.photos/100/100', description: 'Öğle yemeği için yardım lazım', type: 'food' },
-                  { id: '2', name: 'Zeynep K.', amount: 1200, location: 'Beşiktaş', time: '12 dk', rating: 5.0, avatar: 'https://picsum.photos/101/101', description: 'Migros alışverişi', type: 'market' },
+                  { id: '1', name: 'Ahmet Y.', amount: 1000, location: 'Kadıköy', time: '5 dk önce', rating: 4.8, avatar: 'https://picsum.photos/100/100', description: 'Öğle yemeği için acil destek lazım, Sodexo geçerli.', type: 'food' },
+                  { id: '2', name: 'Zeynep K.', amount: 1200, location: 'Beşiktaş', time: '12 dk önce', rating: 5.0, avatar: 'https://picsum.photos/101/101', description: 'Migros alışverişi yapacağım, yardımcı olabilir misiniz?', type: 'market' },
                ];
                return mockListings;
            }
@@ -269,18 +268,12 @@ export const Supporters: React.FC = () => {
               beneficiaryPays: 0
           };
       }
-      // Logic for 20% Sharing (Trading)
-      const contribution = amount * 0.20; // 20% discount (This is the supporter's "contribution" to the seeker)
-      const beneficiaryPays = amount * 0.80; // Beneficiary (Seeker) pays 80%
-      const fee = amount * 0.05; // 5% fee on total
       
-      // Total Cost to Supporter = The discount given + The fee paid from the transaction
-      // Cost Logic: (Meal Card 1000) - (Net Cash Received) = Cost.
-      // Net Cash Received = 800 (from Seeker) - 50 (Fee) = 750.
-      // Cost = 1000 - 750 = 250.
+      const contribution = amount * 0.20; 
+      const beneficiaryPays = amount * 0.80; 
+      const fee = amount * 0.05; 
       const totalCostToSupporter = contribution + fee; 
-      
-      const netReceive = beneficiaryPays - fee; // What supporter gets in cash
+      const netReceive = beneficiaryPays - fee; 
 
       return {
           contribution,
@@ -302,12 +295,12 @@ export const Supporters: React.FC = () => {
          </div>
       </div>
 
-      <div className="px-4 -mt-6 md:mt-0 relative z-20 space-y-3">
+      <div className="px-4 -mt-6 md:mt-0 relative z-20 space-y-4">
         <div className="bg-white p-1 rounded-xl flex gap-1 border border-gray-200 shadow-sm max-w-sm mx-auto md:mx-0">
-            <button onClick={() => setActiveTab('all')} className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${activeTab === 'all' ? 'bg-slate-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
+            <button onClick={() => setActiveTab('all')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'all' ? 'bg-slate-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
               Paylaşım Bekleyenler
             </button>
-            <button onClick={() => setActiveTab('my-support')} className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${activeTab === 'my-support' ? 'bg-slate-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
+            <button onClick={() => setActiveTab('my-support')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'my-support' ? 'bg-slate-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
               Paylaşımlarım
             </button>
         </div>
@@ -316,35 +309,63 @@ export const Supporters: React.FC = () => {
           <>
             <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
                {FILTERS.map(filter => (
-                  <button key={filter.id} onClick={() => setActiveFilter(filter.id)} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border ${activeFilter === filter.id ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-500 border-gray-200'}`}>
+                  <button key={filter.id} onClick={() => setActiveFilter(filter.id)} className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold transition-all border ${activeFilter === filter.id ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-500 border-gray-200'}`}>
                      {filter.icon} {filter.label}
                   </button>
                ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {loading ? (
-                 <div className="col-span-full text-center py-6 text-gray-400"><Loader2 size={20} className="animate-spin mx-auto mb-2" /><p className="text-[10px]">Yükleniyor...</p></div>
+                 <div className="col-span-full text-center py-10 text-gray-400"><Loader2 size={32} className="animate-spin mx-auto mb-3" /><p className="text-xs">Yükleniyor...</p></div>
               ) : filteredListings.length === 0 ? (
-                 <div className="col-span-full text-center py-6 text-gray-400 bg-white rounded-xl border border-gray-100"><p className="text-[10px]">Talep yok.</p></div>
+                 <div className="col-span-full text-center py-10 text-gray-400 bg-white rounded-2xl border border-gray-100"><p className="text-sm font-medium">Şu an aktif talep bulunmuyor.</p></div>
               ) : (
                  filteredListings.map((listing) => (
-                   <div key={listing.id} onClick={(e) => handleSupportClick(e, listing)} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 active:scale-[0.99] transition-transform flex items-center gap-3 cursor-pointer hover:shadow-md">
-                     <div className="w-12 h-12 shrink-0 rounded-full bg-gray-50 overflow-hidden border border-gray-100 relative group">
-                        <img src={listing.avatar} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt="User" />
-                     </div>
-                     <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-center mb-0.5">
-                           <h3 className="text-slate-800 font-bold text-sm">{listing.name}</h3>
-                           <span className="text-xs font-bold text-slate-900 bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-0.5 rounded-lg">{listing.amount} ₺</span>
+                   <div key={listing.id} onClick={(e) => handleSupportClick(e, listing)} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 hover:shadow-lg transition-all cursor-pointer group flex flex-col gap-4 relative overflow-hidden">
+                     {/* Decorative gradient blob */}
+                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-bl-full -mr-8 -mt-8 z-0 transition-transform group-hover:scale-110"></div>
+                     
+                     <div className="flex justify-between items-start relative z-10">
+                        <div className="flex items-center gap-3">
+                            <div className="w-14 h-14 rounded-full p-0.5 bg-white shadow-sm border border-gray-100">
+                                <img src={listing.avatar} className="w-full h-full rounded-full object-cover" alt="User" />
+                            </div>
+                            <div>
+                                <h3 className="text-slate-900 font-bold text-base leading-tight">{listing.name}</h3>
+                                <div className="flex items-center gap-1 mt-0.5">
+                                    <Heart size={12} className="text-rose-500 fill-rose-500" />
+                                    <span className="text-xs font-medium text-gray-500">{listing.rating}</span>
+                                </div>
+                            </div>
                         </div>
-                        <p className="text-xs text-gray-500 line-clamp-1">{listing.description}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                           <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{listing.location}</span>
-                           <span className="text-[9px] text-gray-400">• {listing.time}</span>
+                        <div className="bg-emerald-500 text-white px-3 py-1.5 rounded-xl shadow-lg shadow-emerald-200 font-bold text-sm tracking-wide">
+                            {listing.amount} ₺
                         </div>
                      </div>
-                     <button className="bg-slate-900 text-white text-[10px] font-bold px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors">Paylaş</button>
+
+                     <div className="relative z-10 min-h-[3rem]">
+                        <p className="text-sm text-gray-600 leading-relaxed font-medium line-clamp-3">
+                           {listing.description}
+                        </p>
+                     </div>
+
+                     <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between relative z-10">
+                         <div className="flex flex-col gap-1 text-xs text-gray-400 font-medium">
+                            <div className="flex items-center gap-1.5">
+                                <MapPin size={14} className="text-gray-300" />
+                                {listing.location}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <Clock size={14} className="text-gray-300" />
+                                {listing.time}
+                            </div>
+                         </div>
+                         
+                         <button className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-bold text-sm hover:bg-slate-800 active:scale-95 transition-all shadow-md flex items-center gap-2 group-hover:pl-8">
+                             Paylaş <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+                         </button>
+                     </div>
                    </div>
                  ))
               )}
@@ -355,9 +376,12 @@ export const Supporters: React.FC = () => {
         {activeTab === 'my-support' && (
           <div className="animate-fade-in max-w-md mx-auto">
              {!activeTransaction ? (
-               <div className="text-center py-8 bg-white rounded-xl border border-gray-100">
-                 <Heart size={24} className="mx-auto text-gray-300 mb-2"/>
-                 <p className="text-[10px] text-gray-400">Aktif paylaşım işleminiz bulunmuyor.</p>
+               <div className="text-center py-12 bg-white rounded-3xl border border-gray-100">
+                 <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                     <Heart size={32} className="text-gray-300"/>
+                 </div>
+                 <h3 className="text-gray-900 font-bold text-sm mb-1">Henüz destek olmadınız</h3>
+                 <p className="text-xs text-gray-400">Listeden bir talep seçerek başlayın.</p>
                </div>
              ) : (
                 <>
