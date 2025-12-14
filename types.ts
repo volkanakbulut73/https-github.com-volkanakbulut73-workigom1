@@ -140,6 +140,16 @@ export const formatName = (fullName: string): string => {
 
 const isUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
+// Helper to convert File to Base64 (Prevents blob: URL errors)
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = error => reject(error);
+  });
+};
+
 // Timeout helper to prevent hanging requests
 const withTimeout = <T>(promise: PromiseLike<T>, ms: number = 8000, fallbackValue?: T): Promise<T> => {
     return Promise.race([
@@ -489,15 +499,11 @@ export const DBService = {
               return publicUrl;
           } catch (error) {
               console.warn("Supabase Storage error (likely bucket missing), falling back to Base64:", error);
-              return new Promise((resolve, reject) => {
-                  const reader = new FileReader();
-                  reader.readAsDataURL(file);
-                  reader.onload = () => resolve(reader.result as string);
-                  reader.onerror = error => reject(error);
-              });
+              // Fallback to Base64 for persistence
+              return await fileToBase64(file);
           }
       }
-      return URL.createObjectURL(file); 
+      return await fileToBase64(file); 
   },
 
   // --- Profile Updates ---
@@ -512,7 +518,7 @@ export const DBService = {
     ReferralService.saveUserProfile({ ...current, ...data });
   },
 
-  uploadAvatar: async (file: File) => { return URL.createObjectURL(file); },
+  uploadAvatar: async (file: File) => { return await fileToBase64(file); },
 
   // --- Messaging (Mock for now) ---
   getInbox: async () => { return []; },
@@ -683,7 +689,7 @@ export const SwapService = {
                 .order('created_at', { ascending: false });
 
             if (error) {
-                console.error("Supabase fetch error details:", JSON.stringify(error, null, 2));
+                console.error("Supabase fetch error:", error); // Log raw object for better debugging
                 // Return mocks only on error, so app isn't blank
                 return mocks; 
             }
@@ -794,7 +800,8 @@ export const SwapService = {
   },
 
   uploadImage: async (file: File): Promise<string> => {
-      const fallbackUrl = 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60';
+      // Improved Upload: Fallback to Base64 if storage fails
+      // This ensures the listing still has a valid image even if buckets are missing/misconfigured
       
       if (isSupabaseConfigured()) {
           try {
@@ -809,16 +816,19 @@ export const SwapService = {
               
               if (error) {
                   console.warn("Supabase Image Upload Error (Bucket might be missing or RLS blocked):", error);
-                  return fallbackUrl; 
+                  // Return Base64 as fallback so the user still sees their image
+                  return await fileToBase64(file);
               }
               
               const { data } = supabase.storage.from('images').getPublicUrl(fileName);
               return data.publicUrl;
           } catch (e) {
               console.warn("Upload exception", e);
-              return fallbackUrl;
+              return await fileToBase64(file);
           }
       }
-      return URL.createObjectURL(file);
+      
+      // Offline mode: Use Base64 (blob: URLs expire on refresh)
+      return await fileToBase64(file);
   }
 };
