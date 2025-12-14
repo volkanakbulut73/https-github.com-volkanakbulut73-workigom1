@@ -223,3 +223,4 @@ export const Register: React.FC = () => {
       </div>
     </div>
   );
+};
