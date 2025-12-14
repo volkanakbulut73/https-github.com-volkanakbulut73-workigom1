@@ -1,13 +1,14 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Plus, Heart, User, ArrowLeftRight } from 'lucide-react';
+import { Home, Plus, Heart, User, ArrowLeftRight, Hash } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
   const location = useLocation();
   const currentPath = location.pathname;
 
   const isMessageDetail = /^\/messages\/.+/.test(currentPath);
+  const isChatRoomDetail = /^\/chatrooms\/.+/.test(currentPath);
 
   // Hide on Landing Page ('/'), Login, Register, or detail pages where necessary
   const shouldHide = 
@@ -21,7 +22,7 @@ export const BottomNav: React.FC = () => {
     return null;
   }
 
-  const isActive = (path: string) => currentPath === path;
+  const isActive = (path: string) => currentPath.startsWith(path);
   
   const NavItem = ({ to, icon: Icon, label, active }: { to: string, icon: any, label: string, active: boolean }) => (
     <Link to={to} className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-full ${active ? 'text-slate-900' : 'text-gray-400 hover:text-gray-500'}`}>
@@ -44,7 +45,7 @@ export const BottomNav: React.FC = () => {
         </Link>
       </div>
 
-      <NavItem to="/swap" icon={ArrowLeftRight} label="Takas" active={isActive('/swap')} />
+      <NavItem to="/chatrooms" icon={Hash} label="Odalar" active={isActive('/chatrooms')} />
       <NavItem to="/profile" icon={User} label="Profil" active={isActive('/profile')} />
     </nav>
   );

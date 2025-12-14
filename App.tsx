@@ -11,6 +11,7 @@ import { FindShare } from './pages/FindShare';
 import { Supporters } from './pages/Supporters';
 import { Profile } from './pages/Profile';
 import { Messages } from './pages/Messages';
+import { ChatRooms } from './pages/ChatRooms'; // Import New Page
 import { SwapList } from './pages/SwapList';
 import { SwapCreate } from './pages/SwapCreate';
 import { SwapDetail } from './pages/SwapDetail';
@@ -191,6 +192,10 @@ const AppRoutes: React.FC = () => {
       {/* Chat Routes - Handled inside Messages for Split View */}
       <Route path="/messages" element={<DashboardLayout><Messages /></DashboardLayout>} />
       <Route path="/messages/:userId" element={<DashboardLayout><Messages /></DashboardLayout>} />
+
+      {/* New Chat Rooms Routes */}
+      <Route path="/chatrooms" element={<DashboardLayout><ChatRooms /></DashboardLayout>} />
+      <Route path="/chatrooms/:channelId" element={<DashboardLayout><ChatRooms /></DashboardLayout>} />
       
       <Route path="/swap" element={<DashboardLayout><SwapList /></DashboardLayout>} />
       <Route path="/swap/create" element={<DashboardLayout><SwapCreate /></DashboardLayout>} />

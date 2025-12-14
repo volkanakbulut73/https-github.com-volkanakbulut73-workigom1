@@ -102,6 +102,24 @@ export interface Message {
   isRead: boolean;
 }
 
+// --- NEW CHAT ROOM TYPES ---
+export interface ChatChannel {
+  id: string;
+  name: string; // e.g. "#genel"
+  description: string;
+  usersOnline: number;
+}
+
+export interface ChannelMessage {
+  id: string;
+  channelId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  content: string;
+  createdAt: string; // ISO string
+}
+
 export interface RewardLog {
   id: string;
   sourceUserName: string;
@@ -493,6 +511,102 @@ export const DBService = {
       createdAt: Date.now(),
       isRead: false
     };
+  },
+
+  // --- CHAT ROOMS (NEW) ---
+  getChannels: async (): Promise<ChatChannel[]> => {
+     if (isSupabaseConfigured()) {
+         // This assumes a 'channels' table exists. If not, will return empty.
+         const { data, error } = await supabase.from('channels').select('*');
+         if (!error && data && data.length > 0) return data;
+     }
+     
+     // Mock Channels
+     return [
+       { id: 'general', name: '#genel', description: 'Workigom genel sohbet alanı', usersOnline: 124 },
+       { id: 'trade', name: '#takas-pazari', description: 'İlanlar hakkında tartışma', usersOnline: 45 },
+       { id: 'support', name: '#yardim-destek', description: 'Kullanıcı yardımlaşma alanı', usersOnline: 12 },
+       { id: 'food', name: '#yemek-onerileri', description: 'Hangi restoran, hangi menü?', usersOnline: 28 },
+     ];
+  },
+
+  getChannelMessages: async (channelId: string): Promise<ChannelMessage[]> => {
+     if (isSupabaseConfigured()) {
+        const { data } = await supabase
+            .from('channel_messages')
+            .select('*, profiles(full_name, avatar_url)')
+            .eq('channel_id', channelId)
+            .order('created_at', { ascending: true })
+            .limit(50);
+            
+        if (data) {
+            return data.map(m => ({
+                id: m.id,
+                channelId: m.channel_id,
+                senderId: m.sender_id,
+                senderName: m.profiles?.full_name || 'Anonim',
+                senderAvatar: m.profiles?.avatar_url || 'https://picsum.photos/100',
+                content: m.content,
+                createdAt: m.created_at
+            }));
+        }
+     }
+     
+     // Mock initial messages for demo
+     const now = new Date();
+     return [
+       { 
+         id: '1', 
+         channelId, 
+         senderId: 'bot', 
+         senderName: 'Sistem', 
+         senderAvatar: 'https://ui-avatars.com/api/?name=System&background=0D8ABC&color=fff', 
+         content: `${channelId === 'general' ? '#genel' : `#${channelId}`} kanalına hoş geldiniz!`, 
+         createdAt: new Date(now.getTime() - 1000 * 60 * 60).toISOString() 
+       }
+     ];
+  },
+
+  sendChannelMessage: async (channelId: string, content: string): Promise<ChannelMessage> => {
+      const user = ReferralService.getUserProfile();
+      
+      if (isSupabaseConfigured()) {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (authUser) {
+              const { data, error } = await supabase
+                  .from('channel_messages')
+                  .insert({
+                      channel_id: channelId,
+                      sender_id: authUser.id,
+                      content: content
+                  })
+                  .select('*, profiles(full_name, avatar_url)')
+                  .single();
+              
+              if (data) {
+                 return {
+                    id: data.id,
+                    channelId: data.channel_id,
+                    senderId: data.sender_id,
+                    senderName: data.profiles?.full_name || user.name,
+                    senderAvatar: data.profiles?.avatar_url || user.avatar,
+                    content: data.content,
+                    createdAt: data.created_at
+                 };
+              }
+          }
+      }
+
+      // Local mock
+      return {
+          id: `msg-${Date.now()}`,
+          channelId,
+          senderId: user.id,
+          senderName: user.name,
+          senderAvatar: user.avatar,
+          content,
+          createdAt: new Date().toISOString()
+      };
   }
 };
 
