@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Camera, Wallet, X } from 'lucide-react';
@@ -44,7 +45,10 @@ export const SwapCreate: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !price) return;
+    if (!title || !price) {
+        alert("Lütfen başlık ve fiyat giriniz.");
+        return;
+    }
 
     setIsLoading(true);
     try {
@@ -60,13 +64,19 @@ export const SwapCreate: React.FC = () => {
         }
 
         let finalPhoto = tempPhoto;
+        // If user selected a file, upload it. If upload fails, `uploadImage` returns a fallback URL.
         if (selectedFile) {
            finalPhoto = await SwapService.uploadImage(selectedFile);
         }
+        
+        // Create the listing with the photo URL (real or fallback)
         await SwapService.createListing(title, desc, parseInt(price), finalPhoto);
+        
+        // Success
         navigate('/swap');
     } catch (error: any) {
-        alert("Hata oluştu: " + (error.message || "Bilinmiyor"));
+        console.error("Swap create error:", error);
+        alert("İlan oluşturulurken bir hata oluştu: " + (error.message || "Bilinmiyor"));
     } finally {
         setIsLoading(false);
     }

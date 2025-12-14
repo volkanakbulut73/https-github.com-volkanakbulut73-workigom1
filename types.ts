@@ -517,7 +517,7 @@ export const DBService = {
 
   // --- CHAT ROOMS ---
   getChannels: async (): Promise<ChatChannel[]> => {
-     // Default Mocks - ALWAYS define these
+     // Default Mocks
      const mocks: ChatChannel[] = [
        { id: 'general', name: '#genel', description: 'Workigom genel sohbet alanı', usersOnline: 124 },
        { id: 'trade', name: '#takas-pazari', description: 'İlanlar hakkında tartışma', usersOnline: 45 },
@@ -530,43 +530,21 @@ export const DBService = {
              const { data, error } = await supabase.from('channels').select('*');
              
              if (error) {
-                 console.warn("Fetch channels error (RLS/Table missing?)", error);
-                 return mocks; // Fallback to mocks immediately on error
+                 console.warn("Fetch channels error", error);
+                 return mocks;
              }
 
-             // Check if data is array AND has length, otherwise return mocks to avoid empty screen
              if (data && data.length > 0) {
                  return data.map((c: any) => ({
                      id: c.id,
                      name: c.name,
-                     description: c.topic || '', // Map DB 'topic' to Interface 'description'
+                     description: c.topic || '',
                      usersOnline: Math.floor(Math.random() * 50) + 5
                  }));
-             } else {
-                 // Table exists but is empty? Seed it if we can.
-                 try {
-                     const seedData = [
-                       { id: 'general', name: '#genel', topic: 'Genel sohbet' },
-                       { id: 'trade', name: '#takas', topic: 'Takas pazarı' }
-                     ];
-                     const { data: inserted, error: insertError } = await supabase.from('channels').insert(seedData).select();
-                     
-                     if (!insertError && inserted && inserted.length > 0) {
-                         return inserted.map((c: any) => ({
-                             id: c.id,
-                             name: c.name,
-                             description: c.topic || '',
-                             usersOnline: 10
-                         }));
-                     }
-                 } catch (seedErr) { /* ignore seed error */ }
-                 
-                 // If seeding failed or we just want to be safe, return mocks
-                 return mocks;
              }
          }
      } catch (e) {
-         console.warn("Error fetching channels, falling back to mock", e);
+         console.warn("Error fetching channels", e);
      }
      
      return mocks;
@@ -595,22 +573,10 @@ export const DBService = {
             }
         }
      } catch (e) {
-        console.warn("Error fetching messages, using mock", e);
+        console.warn("Error fetching messages", e);
      }
      
-     // Mock initial messages for demo if DB fail or offline
-     const now = new Date();
-     return [
-       { 
-         id: '1', 
-         channelId, 
-         senderId: 'bot', 
-         senderName: 'Sistem', 
-         senderAvatar: 'https://ui-avatars.com/api/?name=System&background=0D8ABC&color=fff', 
-         content: `${channelId === 'general' ? '#genel' : `#${channelId}`} kanalına hoş geldiniz!`, 
-         createdAt: new Date(now.getTime() - 1000 * 60 * 60).toISOString() 
-       }
-     ];
+     return [];
   },
 
   sendChannelMessage: async (channelId: string, content: string): Promise<ChannelMessage> => {
@@ -645,10 +611,9 @@ export const DBService = {
           }
       } catch (e) {
           console.error("Message send failed", e);
-          throw e; // Let UI handle error
+          throw e;
       }
 
-      // Local mock
       return {
           id: `msg-${Date.now()}`,
           channelId,
@@ -665,7 +630,7 @@ export const DBService = {
 
 export const SwapService = {
   getListings: async (): Promise<SwapListing[]> => {
-    // Default Mocks
+    // Demo mocks just in case
     const mocks: SwapListing[] = [
       {
         id: '1',
@@ -690,18 +655,6 @@ export const SwapService = {
         ownerName: 'Ahmet Y.',
         ownerAvatar: 'https://picsum.photos/102/102',
         createdAt: new Date().toISOString()
-      },
-      {
-        id: '3',
-        title: 'JBL Flip 5 Hoparlör',
-        description: 'Kırmızı renk, garantisi devam ediyor.',
-        requiredBalance: 1500,
-        photoUrl: 'https://images.unsplash.com/photo-1612217025870-80252b57e600?w=500&auto=format&fit=crop&q=60',
-        location: 'Şişli, İstanbul',
-        ownerId: 'user-4',
-        ownerName: 'Mehmet S.',
-        ownerAvatar: 'https://picsum.photos/103/103',
-        createdAt: new Date().toISOString()
       }
     ];
 
@@ -712,9 +665,10 @@ export const SwapService = {
                 .select('*, profiles(full_name, avatar_url, location)')
                 .order('created_at', { ascending: false });
 
-            // If Supabase returns data, use it. 
-            // If data is empty (just initialized DB), return mocks instead of empty list.
-            if (!error && data && data.length > 0) {
+            // CRITICAL FIX: If DB is connected and returns data (even if length is 0), use it.
+            // Don't fall back to mocks unless there's an actual ERROR.
+            // If data exists, map it.
+            if (!error && data) {
                 return data.map((item: any) => ({
                     id: item.id,
                     title: item.title,
@@ -728,8 +682,15 @@ export const SwapService = {
                     createdAt: item.created_at
                 }));
             }
+            if (error) {
+                console.error("Supabase error fetching listings:", error);
+                // On error, we might fall back to mocks for demo purposes or return empty
+                // For this user request, better to return mocks if DB fails entirely
+                return mocks;
+            }
         } catch (e) {
             console.error(e);
+            return mocks;
         }
     }
 
@@ -780,7 +741,12 @@ export const SwapService = {
              price,
              photo_url: photoUrl
          });
-         if (error) throw error;
+         if (error) {
+             console.error("Insert listing error:", error);
+             throw error;
+         }
+       } else {
+           throw new Error("Kullanıcı oturumu bulunamadı.");
        }
     }
     // No-op for demo if not configured
@@ -793,17 +759,27 @@ export const SwapService = {
   },
 
   uploadImage: async (file: File): Promise<string> => {
+      const fallbackUrl = 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60';
+      
       if (isSupabaseConfigured()) {
           try {
               const fileExt = file.name.split('.').pop();
               const fileName = `swap/${Math.random().toString(36).substring(2)}.${fileExt}`;
+              
+              // Try upload
               const { error } = await supabase.storage.from('images').upload(fileName, file);
-              if (error) throw error;
+              
+              if (error) {
+                  console.warn("Supabase Image Upload Error (Bucket might be missing or RLS blocked):", error);
+                  // Return a safe fallback so the listing creation DOES NOT HANG
+                  return fallbackUrl; 
+              }
               
               const { data } = supabase.storage.from('images').getPublicUrl(fileName);
               return data.publicUrl;
           } catch (e) {
-              console.warn("Upload failed", e);
+              console.warn("Upload exception", e);
+              return fallbackUrl;
           }
       }
       return URL.createObjectURL(file);
