@@ -371,12 +371,9 @@ export const Supporters: React.FC = () => {
                         {/* Decorative Blur */}
                         <div className="absolute top-0 right-0 w-20 h-20 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-xl"></div>
                         
-                        <div className="flex flex-col relative z-10">
-                            <span className="text-[10px] font-bold text-emerald-50 uppercase tracking-wider mb-0.5 opacity-90">Yemek Kartı Bakiyesi</span>
-                             <div className="flex items-center gap-2">
-                                 <Wallet size={16} className="text-emerald-100" />
-                                 <span className="font-bold text-xs text-emerald-100">Limit</span>
-                             </div>
+                        <div className="flex items-center gap-2 relative z-10">
+                            <Wallet size={20} className="text-emerald-100 opacity-80" />
+                            <span className="font-bold text-sm text-emerald-50 uppercase tracking-wide">Menü Tutarı</span>
                         </div>
                         <div className="relative z-10 text-right">
                              <span className="block text-2xl font-black tracking-tight">{listing.amount} <span className="text-lg">₺</span></span>
