@@ -1,5 +1,6 @@
 import React from 'react';
 import { Wallet, Instagram, Twitter, Linkedin } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export const Footer: React.FC = () => {
   return (
@@ -32,7 +33,7 @@ export const Footer: React.FC = () => {
             <ul className="space-y-2 text-slate-400 text-sm">
               <li><a href="#" className="hover:text-emerald-400 transition-colors">Hakkımızda</a></li>
               <li><a href="#" className="hover:text-emerald-400 transition-colors">İletişim</a></li>
-              <li><a href="#" className="hover:text-emerald-400 transition-colors">Gizlilik Politikası</a></li>
+              <li><Link to="/privacy" className="hover:text-emerald-400 transition-colors">Gizlilik Politikası</Link></li>
             </ul>
           </div>
 

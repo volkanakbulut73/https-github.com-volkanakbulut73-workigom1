@@ -17,6 +17,7 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Invite } from './pages/Invite';
 import { Earnings } from './pages/Earnings';
+import { PrivacyPolicy } from './pages/PrivacyPolicy';
 
 // Main Dashboard Layout (3-Column)
 const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -60,6 +61,7 @@ const AppRoutes: React.FC = () => {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
       
       {/* Auth Routes */}
       <Route path="/login" element={<AuthLayout><Login /></AuthLayout>} />
