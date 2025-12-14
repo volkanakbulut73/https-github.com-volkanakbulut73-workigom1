@@ -1,5 +1,4 @@
 
-
 // ... existing imports
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
@@ -518,7 +517,7 @@ export const DBService = {
 
   // --- CHAT ROOMS ---
   getChannels: async (): Promise<ChatChannel[]> => {
-     // Default Mocks
+     // Default Mocks - ALWAYS define these
      const mocks: ChatChannel[] = [
        { id: 'general', name: '#genel', description: 'Workigom genel sohbet alanı', usersOnline: 124 },
        { id: 'trade', name: '#takas-pazari', description: 'İlanlar hakkında tartışma', usersOnline: 45 },
@@ -535,6 +534,7 @@ export const DBService = {
                  return mocks; // Fallback to mocks immediately on error
              }
 
+             // Check if data is array AND has length, otherwise return mocks to avoid empty screen
              if (data && data.length > 0) {
                  return data.map((c: any) => ({
                      id: c.id,
@@ -543,14 +543,15 @@ export const DBService = {
                      usersOnline: Math.floor(Math.random() * 50) + 5
                  }));
              } else {
-                 // Empty table? Seed it if we can.
+                 // Table exists but is empty? Seed it if we can.
                  try {
                      const seedData = [
-                       { name: '#genel', topic: 'Genel sohbet' },
-                       { name: '#takas', topic: 'Takas pazarı' }
+                       { id: 'general', name: '#genel', topic: 'Genel sohbet' },
+                       { id: 'trade', name: '#takas', topic: 'Takas pazarı' }
                      ];
-                     const { data: inserted } = await supabase.from('channels').insert(seedData).select();
-                     if (inserted) {
+                     const { data: inserted, error: insertError } = await supabase.from('channels').insert(seedData).select();
+                     
+                     if (!insertError && inserted && inserted.length > 0) {
                          return inserted.map((c: any) => ({
                              id: c.id,
                              name: c.name,
@@ -560,6 +561,7 @@ export const DBService = {
                      }
                  } catch (seedErr) { /* ignore seed error */ }
                  
+                 // If seeding failed or we just want to be safe, return mocks
                  return mocks;
              }
          }
@@ -596,7 +598,7 @@ export const DBService = {
         console.warn("Error fetching messages, using mock", e);
      }
      
-     // Mock initial messages for demo
+     // Mock initial messages for demo if DB fail or offline
      const now = new Date();
      return [
        { 
@@ -663,34 +665,8 @@ export const DBService = {
 
 export const SwapService = {
   getListings: async (): Promise<SwapListing[]> => {
-    if (isSupabaseConfigured()) {
-        try {
-            const { data, error } = await supabase
-                .from('swap_listings')
-                .select('*, profiles(full_name, avatar_url, location)')
-                .order('created_at', { ascending: false });
-
-            if (!error && data) {
-                return data.map((item: any) => ({
-                    id: item.id,
-                    title: item.title,
-                    description: item.description,
-                    requiredBalance: item.price,
-                    photoUrl: item.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
-                    location: item.profiles?.location || 'İstanbul',
-                    ownerId: item.owner_id,
-                    ownerName: item.profiles?.full_name || 'Kullanıcı',
-                    ownerAvatar: item.profiles?.avatar_url || 'https://picsum.photos/200',
-                    createdAt: item.created_at
-                }));
-            }
-        } catch (e) {
-            console.error(e);
-        }
-    }
-
-    // Mock Data
-    return [
+    // Default Mocks
+    const mocks: SwapListing[] = [
       {
         id: '1',
         title: 'Sony WH-1000XM4 Kulaklık',
@@ -728,6 +704,37 @@ export const SwapService = {
         createdAt: new Date().toISOString()
       }
     ];
+
+    if (isSupabaseConfigured()) {
+        try {
+            const { data, error } = await supabase
+                .from('swap_listings')
+                .select('*, profiles(full_name, avatar_url, location)')
+                .order('created_at', { ascending: false });
+
+            // If Supabase returns data, use it. 
+            // If data is empty (just initialized DB), return mocks instead of empty list.
+            if (!error && data && data.length > 0) {
+                return data.map((item: any) => ({
+                    id: item.id,
+                    title: item.title,
+                    description: item.description,
+                    requiredBalance: item.price,
+                    photoUrl: item.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
+                    location: item.profiles?.location || 'İstanbul',
+                    ownerId: item.owner_id,
+                    ownerName: item.profiles?.full_name || 'Kullanıcı',
+                    ownerAvatar: item.profiles?.avatar_url || 'https://picsum.photos/200',
+                    createdAt: item.created_at
+                }));
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    // Return mocks if DB is empty or not configured
+    return mocks;
   },
 
   getListingById: async (id: string): Promise<SwapListing | null> => {

@@ -62,6 +62,9 @@ export const ChatRooms: React.FC = () => {
   useEffect(() => {
       if (!activeChannel) return;
 
+      // CLEAR MESSAGES IMMEDIATELY when switching channels
+      setMessages([]); 
+
       const loadMessages = async () => {
           try {
              const msgs = await DBService.getChannelMessages(activeChannel.id);
@@ -85,9 +88,12 @@ export const ChatRooms: React.FC = () => {
                       filter: `channel_id=eq.${activeChannel.id}`
                   }, async (payload) => {
                       // Fetch fresh messages to ensure we have sender details
-                      const freshMsgs = await DBService.getChannelMessages(activeChannel.id);
-                      setMessages(freshMsgs);
-                      scrollToBottom('smooth');
+                      // Double check filtering by ID to prevent cross-talk
+                      if (payload.new && payload.new.channel_id === activeChannel.id) {
+                          const freshMsgs = await DBService.getChannelMessages(activeChannel.id);
+                          setMessages(freshMsgs);
+                          scrollToBottom('smooth');
+                      }
                   })
                   .subscribe();
           } catch (e) {
@@ -135,6 +141,8 @@ export const ChatRooms: React.FC = () => {
   };
 
   const handleChannelSelect = (channel: ChatChannel) => {
+      // Clear current messages to show visual feedback of switching
+      setMessages([]);
       navigate(`/chatrooms/${channel.id}`);
       setActiveChannel(channel);
       setIsMobileMenuOpen(false);
@@ -225,38 +233,44 @@ export const ChatRooms: React.FC = () => {
 
          {/* Messages List */}
          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 scroll-smooth">
-             {messages.map((msg, index) => {
-                 const isMe = msg.senderId === currentUser.id;
-                 const showHeader = index === 0 || messages[index-1].senderId !== msg.senderId;
-                 
-                 return (
-                     <div key={msg.id} className={`group flex gap-3 ${isMe ? 'flex-row-reverse' : ''} animate-fade-in`}>
-                         {showHeader ? (
-                             <img src={msg.senderAvatar} className="w-8 h-8 rounded-full bg-slate-800 object-cover mt-1" alt={msg.senderName} />
-                         ) : (
-                             <div className="w-8 h-8 shrink-0"></div>
-                         )}
-                         
-                         <div className={`max-w-[80%] ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
-                             {showHeader && (
-                                 <span className={`text-[10px] font-bold mb-1 ml-1 ${isMe ? 'text-emerald-400' : 'text-slate-400'}`}>
-                                     {msg.senderName}
-                                 </span>
+             {messages.length === 0 ? (
+                 <div className="flex items-center justify-center h-full text-slate-600 text-sm">
+                     Mesajlar yükleniyor veya bu oda boş...
+                 </div>
+             ) : (
+                 messages.map((msg, index) => {
+                     const isMe = msg.senderId === currentUser.id;
+                     const showHeader = index === 0 || messages[index-1].senderId !== msg.senderId;
+                     
+                     return (
+                         <div key={msg.id} className={`group flex gap-3 ${isMe ? 'flex-row-reverse' : ''} animate-fade-in`}>
+                             {showHeader ? (
+                                 <img src={msg.senderAvatar} className="w-8 h-8 rounded-full bg-slate-800 object-cover mt-1" alt={msg.senderName} />
+                             ) : (
+                                 <div className="w-8 h-8 shrink-0"></div>
                              )}
-                             <div className={`px-4 py-2 rounded-2xl text-sm leading-relaxed shadow-sm break-words ${
-                                 isMe 
-                                 ? 'bg-emerald-600 text-white rounded-tr-none' 
-                                 : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700'
-                             }`}>
-                                 {msg.content}
+                             
+                             <div className={`max-w-[80%] ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
+                                 {showHeader && (
+                                     <span className={`text-[10px] font-bold mb-1 ml-1 ${isMe ? 'text-emerald-400' : 'text-slate-400'}`}>
+                                         {msg.senderName}
+                                     </span>
+                                 )}
+                                 <div className={`px-4 py-2 rounded-2xl text-sm leading-relaxed shadow-sm break-words ${
+                                     isMe 
+                                     ? 'bg-emerald-600 text-white rounded-tr-none' 
+                                     : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700'
+                                 }`}>
+                                     {msg.content}
+                                 </div>
+                                 <span className="text-[9px] text-slate-600 mt-1 px-1">
+                                     {new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                 </span>
                              </div>
-                             <span className="text-[9px] text-slate-600 mt-1 px-1">
-                                 {new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                             </span>
                          </div>
-                     </div>
-                 );
-             })}
+                     );
+                 })
+             )}
              <div ref={messagesEndRef} className="h-2"></div>
          </div>
 
