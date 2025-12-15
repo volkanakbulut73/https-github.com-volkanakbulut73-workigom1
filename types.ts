@@ -690,7 +690,7 @@ export const SwapService = {
                 return mocks; 
             }
 
-            if (data && Array.isArray(data)) {
+            if (data && Array.isArray(data) && data.length > 0) {
                 return data.map((item: any) => ({
                     id: item.id,
                     title: item.title,
@@ -704,7 +704,10 @@ export const SwapService = {
                     createdAt: item.created_at // string from timestamptz
                 }));
             }
-            return []; // Empty DB returns empty list
+            
+            // FALLBACK TO MOCKS IF DB IS EMPTY
+            // This fixes the "list is empty" issue on fresh DBs
+            return mocks;
         } catch (e) {
             console.error("Swap service exception:", e);
             return mocks;
