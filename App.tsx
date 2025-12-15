@@ -17,9 +17,8 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Invite } from './pages/Invite';
 import { Earnings } from './pages/Earnings';
-import { Messages } from './pages/Messages';
-import { ChatRooms } from './pages/ChatRooms';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
+import { Chat } from './pages/Chat';
 import { ReferralService, DBService, User } from './types'; 
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
@@ -200,13 +199,7 @@ const AppRoutes: React.FC = () => {
       <Route path="/invite" element={<DashboardLayout><Invite /></DashboardLayout>} />
       <Route path="/earnings" element={<DashboardLayout><Earnings /></DashboardLayout>} />
       
-      {/* Messaging */}
-      <Route path="/messages" element={<DashboardLayout><Messages /></DashboardLayout>} />
-      <Route path="/messages/:userId" element={<DashboardLayout><Messages /></DashboardLayout>} />
-      
-      {/* Channels */}
-      <Route path="/chatrooms" element={<DashboardLayout><ChatRooms /></DashboardLayout>} />
-      <Route path="/chatrooms/:channelId" element={<DashboardLayout><ChatRooms /></DashboardLayout>} />
+      <Route path="/chat" element={<DashboardLayout><Chat /></DashboardLayout>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
