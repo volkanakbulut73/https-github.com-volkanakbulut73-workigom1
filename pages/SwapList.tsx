@@ -14,9 +14,8 @@ export const SwapList: React.FC = () => {
   const currentUser = ReferralService.getUserProfile();
 
   const loadListings = async () => {
-    // Only show full loader on first load, otherwise background refresh
-    if (listings.length === 0) setLoading(true);
-    
+    // Logic from mobile code: set loading true at start
+    setLoading(true);
     try {
       const data = await SwapService.getListings();
       if (Array.isArray(data)) {
@@ -25,14 +24,18 @@ export const SwapList: React.FC = () => {
         setListings([]);
       }
     } catch (e) {
-      console.error("List load error", e);
+      console.error(e);
+      setListings([]);
     } finally {
+      // Logic from mobile code: always turn off loading in finally
       setLoading(false);
     }
   };
 
+  // Logic from mobile code: simple useEffect
   useEffect(() => { 
       loadListings();
+      // Added listener to update UI when creating items locally
       const handleStorage = () => loadListings();
       window.addEventListener('storage', handleStorage);
       return () => window.removeEventListener('storage', handleStorage);
@@ -42,7 +45,7 @@ export const SwapList: React.FC = () => {
       e.stopPropagation();
       if (window.confirm('Bu ilanı silmek istediğinize emin misiniz?')) {
           await SwapService.deleteListing(id);
-          loadListings();
+          loadListings(); // Refresh list
       }
   };
 
@@ -59,10 +62,15 @@ export const SwapList: React.FC = () => {
 
   const filteredListings = listings.filter(l => {
     if (!l) return false;
+    
+    // Search Filter
     const title = safeStr(l.title).toLowerCase();
     const search = searchTerm.toLowerCase();
     const matchesSearch = title.includes(search);
+
+    // Tab Filter
     const matchesTab = activeTab === 'all' ? true : l.ownerId === currentUser.id;
+
     return matchesSearch && matchesTab;
   });
 

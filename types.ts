@@ -260,6 +260,7 @@ export const TransactionService = {
 };
 
 export const DBService = {
+  // ... (previous DBService methods remain until Storage)
   getUserProfile: async (id: string): Promise<User | null> => {
     if (isSupabaseConfigured()) {
        try {
@@ -274,7 +275,7 @@ export const DBService = {
                  name: data.full_name,
                  avatar: data.avatar_url || 'https://picsum.photos/200',
                  rating: data.rating || 5.0,
-                 location: 'İstanbul', // Default if missing
+                 location: 'İstanbul', 
                  goldenHearts: 0,
                  silverHearts: 0,
                  isAvailable: true,
@@ -290,7 +291,6 @@ export const DBService = {
            console.error(e);
        }
     }
-    // Return null if not found in DB so we can handle creation
     return null;
   },
 
@@ -298,20 +298,12 @@ export const DBService = {
     return { messages: 0, notifications: 0 };
   },
 
-  // --- Transactions Table Methods ---
-
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
     if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
+        const { data } = await supabase
             .from('transactions')
-            .select(`
-                *,
-                seeker:seeker_id(full_name),
-                supporter:supporter_id(full_name)
-            `)
+            .select(`*, seeker:seeker_id(full_name), supporter:supporter_id(full_name)`)
             .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
-            // Exclude dismissed (archived) and cancelled.
-            // INCLUDES 'completed' so the success screen persists.
             .neq('status', 'dismissed')
             .neq('status', 'cancelled')
             .order('created_at', { ascending: false })
@@ -349,7 +341,7 @@ export const DBService = {
                 amount: amount,
                 listing_title: description,
                 status: 'waiting-supporter',
-                support_percentage: 20 // Default initially
+                support_percentage: 20 
             })
             .select()
             .single();
@@ -364,10 +356,7 @@ export const DBService = {
     if (isSupabaseConfigured()) {
         const { data } = await supabase
             .from('transactions')
-            .select(`
-                *,
-                profiles:seeker_id(full_name, avatar_url, rating)
-            `)
+            .select(`*, profiles:seeker_id(full_name, avatar_url, rating)`)
             .eq('status', 'waiting-supporter')
             .order('created_at', { ascending: false });
         return data || [];
@@ -395,83 +384,52 @@ export const DBService = {
 
   markCashPaid: async (txId: string) => {
       if (isSupabaseConfigured() && isUUID(txId)) {
-          const { error } = await supabase
-              .from('transactions')
-              .update({ status: 'cash-paid' })
-              .eq('id', txId);
+          const { error } = await supabase.from('transactions').update({ status: 'cash-paid' }).eq('id', txId);
           if (error) throw error;
       }
   },
 
   submitQR: async (txId: string, url: string) => {
       if (isSupabaseConfigured() && isUUID(txId)) {
-          const { error } = await supabase
-              .from('transactions')
-              .update({ 
-                  status: 'qr-uploaded',
-                  qr_url: url,
-                  qr_uploaded_at: new Date().toISOString()
-              })
-              .eq('id', txId);
+          const { error } = await supabase.from('transactions')
+              .update({ status: 'qr-uploaded', qr_url: url, qr_uploaded_at: new Date().toISOString() }).eq('id', txId);
           if (error) throw error;
       }
   },
 
   completeTransaction: async (txId: string) => {
       if (isSupabaseConfigured() && isUUID(txId)) {
-          const { error } = await supabase
-              .from('transactions')
-              .update({ 
-                  status: 'completed',
-                  completed_at: new Date().toISOString()
-              })
-              .eq('id', txId);
+          const { error } = await supabase.from('transactions')
+              .update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', txId);
           if (error) throw error;
       }
   },
 
   failTransaction: async (txId: string) => {
       if (isSupabaseConfigured() && isUUID(txId)) {
-          const { error } = await supabase
-              .from('transactions')
-              .update({ status: 'failed' })
-              .eq('id', txId);
+          const { error } = await supabase.from('transactions').update({ status: 'failed' }).eq('id', txId);
           if (error) throw error;
       }
   },
 
   cancelTransaction: async (txId: string) => {
       if (isSupabaseConfigured() && isUUID(txId)) {
-          // Using DELETE to handle cancellation clearly on backend
-          const { error } = await supabase
-              .from('transactions')
-              .delete()
-              .eq('id', txId);
+          const { error } = await supabase.from('transactions').delete().eq('id', txId);
           if (error) throw error;
       }
-      // If not UUID or not configured, it's local state, frontend will clear it
   },
 
   withdrawSupport: async (txId: string) => {
       if (isSupabaseConfigured() && isUUID(txId)) {
-          const { error } = await supabase
-              .from('transactions')
-              .update({ 
-                  status: 'waiting-supporter',
-                  supporter_id: null,
-                  support_percentage: 20
-              })
-              .eq('id', txId);
+          const { error } = await supabase.from('transactions')
+              .update({ status: 'waiting-supporter', supporter_id: null, support_percentage: 20 }).eq('id', txId);
           if (error) throw error;
       }
   },
 
   dismissTransaction: async (txId: string) => {
       if (isSupabaseConfigured() && isUUID(txId)) {
-          const { error } = await supabase
-              .from('transactions')
-              .update({ status: 'dismissed' })
-              .eq('id', txId);
+          const { error } = await supabase.from('transactions').update({ status: 'dismissed' }).eq('id', txId);
           if (error) throw error;
       }
       TransactionService.clearActive();
@@ -485,21 +443,17 @@ export const DBService = {
               const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
               const filePath = `${fileName}`;
 
-              // Timeout for upload to prevent hanging
               const { error: uploadError } = await withTimeout(
-                  supabase.storage.from('qr-codes').upload(filePath, file)
+                  supabase.storage.from('qr-codes').upload(filePath, file),
+                  8000
               ) as any;
 
               if (uploadError) throw uploadError;
 
-              const { data: { publicUrl } } = supabase.storage
-                .from('qr-codes')
-                .getPublicUrl(filePath);
-
+              const { data: { publicUrl } } = supabase.storage.from('qr-codes').getPublicUrl(filePath);
               return publicUrl;
           } catch (error) {
-              console.warn("Supabase Storage error (likely bucket missing), falling back to Base64:", error);
-              // Fallback to Base64 for persistence
+              console.warn("Supabase Storage error, fallback to Base64");
               return await fileToBase64(file);
           }
       }
@@ -511,7 +465,6 @@ export const DBService = {
     if (isSupabaseConfigured()) {
         const updates: any = {};
         if (data.name) updates.full_name = data.name;
-        // ... map other fields
         await supabase.from('profiles').update(updates).eq('id', id);
     }
     const current = ReferralService.getUserProfile();
@@ -520,7 +473,7 @@ export const DBService = {
 
   uploadAvatar: async (file: File) => { return await fileToBase64(file); },
 
-  // --- Messaging (Mock for now) ---
+  // --- Messaging (Mock) ---
   getInbox: async () => { return []; },
   getChatHistory: async (userId: string, lastTime?: number) => { return []; },
   markAsRead: async (userId: string) => {},
@@ -537,24 +490,16 @@ export const DBService = {
 
   // --- CHAT ROOMS ---
   getChannels: async (): Promise<ChatChannel[]> => {
-     // Default Mocks
      const mocks: ChatChannel[] = [
        { id: 'general', name: '#genel', description: 'Workigom genel sohbet alanı', usersOnline: 124 },
        { id: 'trade', name: '#takas-pazari', description: 'İlanlar hakkında tartışma', usersOnline: 45 },
        { id: 'support', name: '#yardim-destek', description: 'Kullanıcı yardımlaşma alanı', usersOnline: 12 },
        { id: 'food', name: '#yemek-onerileri', description: 'Hangi restoran, hangi menü?', usersOnline: 28 },
      ];
-
      try {
          if (isSupabaseConfigured()) {
              const { data, error } = await supabase.from('channels').select('*');
-             
-             if (error) {
-                 console.warn("Fetch channels error", error);
-                 return mocks;
-             }
-
-             if (data && data.length > 0) {
+             if (!error && data && data.length > 0) {
                  return data.map((c: any) => ({
                      id: c.id,
                      name: c.name,
@@ -566,7 +511,6 @@ export const DBService = {
      } catch (e) {
          console.warn("Error fetching channels", e);
      }
-     
      return mocks;
   },
 
@@ -595,24 +539,18 @@ export const DBService = {
      } catch (e) {
         console.warn("Error fetching messages", e);
      }
-     
      return [];
   },
 
   sendChannelMessage: async (channelId: string, content: string): Promise<ChannelMessage> => {
       const user = ReferralService.getUserProfile();
-      
       try {
           if (isSupabaseConfigured()) {
               const { data: { user: authUser } } = await supabase.auth.getUser();
               if (authUser) {
-                  const { data, error } = await supabase
+                  const { data } = await supabase
                       .from('channel_messages')
-                      .insert({
-                          channel_id: channelId,
-                          sender_id: authUser.id,
-                          content: content
-                      })
+                      .insert({ channel_id: channelId, sender_id: authUser.id, content: content })
                       .select('*, profiles(full_name, avatar_url)')
                       .single();
                   
@@ -633,7 +571,6 @@ export const DBService = {
           console.error("Message send failed", e);
           throw e;
       }
-
       return {
           id: `msg-${Date.now()}`,
           channelId,
@@ -659,7 +596,6 @@ export const SwapService = {
   
   saveLocalListing: (listing: SwapListing) => {
       const current = SwapService.getLocalListings();
-      // Add new listing at the beginning, ensuring uniqueness
       const filtered = current.filter(l => l.id !== listing.id);
       localStorage.setItem('local_swap_listings', JSON.stringify([listing, ...filtered]));
       window.dispatchEvent(new Event('storage'));
@@ -693,15 +629,21 @@ export const SwapService = {
       }
     ];
 
-    // 1. Get Local Items (These are user created items or cached items)
+    // 1. Get Local Items
     const local = SwapService.getLocalListings();
     
     let remote: SwapListing[] = [];
 
-    // 2. Try Fetch DB
+    // 2. Try Fetch DB with Timeout
     if (isSupabaseConfigured()) {
         try {
-            const { data, error } = await supabase.from('swap_listings').select('*').order('created_at', { ascending: false });
+            // Using withTimeout to prevent hanging loading screens
+            const { data, error } = await withTimeout(
+                supabase.from('swap_listings').select('*').order('created_at', { ascending: false }),
+                5000, // 5 seconds timeout
+                { data: null, error: { message: 'Timeout' } } as any
+            );
+
             if (!error && data) {
                 remote = data.map((item: any) => ({
                     id: item.id,
@@ -722,47 +664,34 @@ export const SwapService = {
     }
 
     // 3. Merge Strategies
-    // Create a map by ID to deduplicate (Remote beats Local usually, but Local might be newer if offline)
-    // Here we assume Remote is source of truth, but we keep Local items that aren't in Remote yet (e.g. failed uploads)
     const combinedMap = new Map<string, SwapListing>();
-    
-    // Add local first
     local.forEach(item => combinedMap.set(item.id, item));
-    
-    // Add/Overwrite with remote (so updated remote items refresh local stale ones)
     remote.forEach(item => combinedMap.set(item.id, item));
-    
     const combined = Array.from(combinedMap.values());
     
-    // If combined is absolutely empty (new user, empty DB), show Mocks for demo feel
-    // But if user has created something locally, show that + mocks? Or just that?
-    // Let's just append Mocks if we have very little data to populate the UI
     if (combined.length === 0) {
         return mocks;
     }
 
-    // Sort by createdAt desc
     combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
     return combined;
   },
 
   getListingById: async (id: string): Promise<SwapListing | null> => {
-     // Check local first (fast)
+     // Check local first
      const local = SwapService.getLocalListings();
      const foundLocal = local.find(l => l.id === id);
      if (foundLocal) return foundLocal;
 
-     // Fetch from DB
      if (isSupabaseConfigured() && !id.startsWith('local-')) {
          try {
-             const { data, error } = await supabase
-                 .from('swap_listings')
-                 .select('*')
-                 .eq('id', id)
-                 .single();
+             const { data } = await withTimeout(
+                 supabase.from('swap_listings').select('*').eq('id', id).single(),
+                 5000,
+                 { data: null } as any
+             );
              
-             if (!error && data) {
+             if (data) {
                  return {
                     id: data.id,
                     title: data.title,
@@ -781,7 +710,6 @@ export const SwapService = {
          }
      }
      
-     // Fallback to mocks
      const all = await SwapService.getListings();
      return all.find(l => l.id === id) || null;
   },
@@ -793,48 +721,50 @@ export const SwapService = {
     let finalListing: SwapListing | null = null;
 
     if (isSupabaseConfigured()) {
-       const { data: { user: authUser } } = await supabase.auth.getUser();
-       if (authUser) {
-         // Get latest profile info
-         const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
-         if(profile) {
-             userName = profile.full_name;
-             userAvatar = profile.avatar_url;
-         }
+       try {
+           const { data: { user: authUser } } = await supabase.auth.getUser();
+           if (authUser) {
+             const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
+             if(profile) {
+                 userName = profile.full_name;
+                 userAvatar = profile.avatar_url;
+             }
 
-         // Try DB Insert
-         const { data, error } = await supabase.from('swap_listings').insert({
-                 owner_id: authUser.id,
-                 title,
-                 description,
-                 required_balance: price,
-                 photo_url: photoUrl,
-                 owner_name: userName,
-                 owner_avatar: userAvatar,
-                 location: 'İstanbul'
-         }).select().single();
-         
-         if (data && !error) {
-             // Success: Use the real DB item
-             finalListing = {
-                id: data.id,
-                title: data.title,
-                description: data.description,
-                requiredBalance: data.required_balance,
-                photoUrl: data.photo_url,
-                location: data.location,
-                ownerId: data.owner_id,
-                ownerName: data.owner_name,
-                ownerAvatar: data.owner_avatar,
-                createdAt: data.created_at
-             };
-         } else {
-             console.warn("DB Insert failed or RLS blocked return. Using Local Fallback.", error);
-         }
+             // Wrapped in timeout
+             const { data, error } = await withTimeout(
+                 supabase.from('swap_listings').insert({
+                     owner_id: authUser.id,
+                     title,
+                     description,
+                     required_balance: price,
+                     photo_url: photoUrl,
+                     owner_name: userName,
+                     owner_avatar: userAvatar,
+                     location: 'İstanbul'
+                 }).select().single(),
+                 8000
+             ) as any;
+             
+             if (data && !error) {
+                 finalListing = {
+                    id: data.id,
+                    title: data.title,
+                    description: data.description,
+                    requiredBalance: data.required_balance,
+                    photoUrl: data.photo_url,
+                    location: data.location,
+                    ownerId: data.owner_id,
+                    ownerName: data.owner_name,
+                    ownerAvatar: data.owner_avatar,
+                    createdAt: data.created_at
+                 };
+             }
+           }
+       } catch (e) {
+           console.warn("DB Create Listing Error (using local)", e);
        }
     }
 
-    // If DB failed or returned nothing (due to RLS 'insert' policy but no 'select' policy?), create a local fallback
     if (!finalListing) {
         finalListing = {
             id: 'local-' + Date.now(),
@@ -850,17 +780,14 @@ export const SwapService = {
         };
     }
 
-    // ALWAYS save to local storage (as cache or fallback)
     SwapService.saveLocalListing(finalListing);
   },
 
   deleteListing: async (id: string) => {
-      // Delete from local
       const current = SwapService.getLocalListings().filter(l => l.id !== id);
       localStorage.setItem('local_swap_listings', JSON.stringify(current));
       window.dispatchEvent(new Event('storage'));
 
-      // Delete from DB
       if (isSupabaseConfigured() && !id.startsWith('local-')) {
           await supabase.from('swap_listings').delete().eq('id', id);
       }
