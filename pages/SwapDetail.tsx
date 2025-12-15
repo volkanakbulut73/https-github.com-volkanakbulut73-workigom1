@@ -1,10 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, MapPin, Wallet, Trash2, Loader2, MessageCircle, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, MapPin, Wallet, Trash2, Loader2, MessageCircle } from 'lucide-react';
 import { Button } from '../components/Button';
 import { SwapService, SwapListing, ReferralService } from '../types';
-import { isSupabaseConfigured } from '../lib/supabase';
 
 export const SwapDetail: React.FC = () => {
   const navigate = useNavigate();
@@ -17,31 +16,14 @@ export const SwapDetail: React.FC = () => {
     const loadListing = async () => {
         if (!id) return;
         setLoading(true);
+        // Servis artık otomatik olarak Mock veya Real data dönüyor
         const item = await SwapService.getListingById(id);
         if (item) setListing(item);
-        else if (!isSupabaseConfigured()) {
-            // Do nothing, UI handles non-configured state
-        } else {
-            // Item not found but configured
-            navigate('/swap'); 
-        }
+        else navigate('/swap');
         setLoading(false);
     };
     loadListing();
   }, [id, navigate]);
-
-  if (!isSupabaseConfigured()) {
-      return (
-         <div className="min-h-screen flex flex-col items-center justify-center bg-white p-6 text-center">
-             <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4">
-                 <AlertTriangle size={32} className="text-red-500" />
-             </div>
-             <h2 className="text-lg font-bold text-gray-800 mb-2">Veritabanı Bağlantısı Yok</h2>
-             <p className="text-gray-500 text-sm mb-6">Bu özelliği kullanabilmek için Supabase bağlantısının yapılması gerekmektedir.</p>
-             <Button onClick={() => navigate('/app')}>Ana Sayfaya Dön</Button>
-         </div>
-      );
-  }
 
   if (loading) {
      return (
@@ -110,16 +92,28 @@ export const SwapDetail: React.FC = () => {
             </div>
 
             {/* İlan Sahibi */}
-            <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                <img 
-                    src={listing.ownerAvatar || 'https://picsum.photos/100'} 
-                    alt={listing.ownerName} 
-                    className="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover" 
-                />
-                <div className="flex-1">
-                    <p className="text-sm font-bold text-slate-800">{listing.ownerName}</p>
-                    <p className="text-xs text-gray-500 font-medium">İlan Sahibi</p>
+            <div className="flex items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                <div className="flex items-center gap-3">
+                    <img 
+                        src={listing.ownerAvatar || 'https://picsum.photos/100'} 
+                        alt={listing.ownerName} 
+                        className="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover" 
+                    />
+                    <div>
+                        <p className="text-sm font-bold text-slate-800">{listing.ownerName}</p>
+                        <p className="text-xs text-gray-500 font-medium">İlan Sahibi</p>
+                    </div>
                 </div>
+                
+                {!isOwner && (
+                    <button 
+                        onClick={handleContact}
+                        className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl shadow-sm border border-gray-200 text-slate-900 font-bold text-xs hover:bg-slate-900 hover:text-white transition-all active:scale-95"
+                    >
+                        <MessageCircle size={18} />
+                        <span>Mesaj At</span>
+                    </button>
+                )}
             </div>
 
             {/* Açıklama */}
