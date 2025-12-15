@@ -1,10 +1,9 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, ShoppingBag, Loader2 } from 'lucide-react';
+import { Lock, Mail, ArrowRight, ShoppingBag, Loader2, UserCheck } from 'lucide-react';
 import { Button } from '../components/Button';
-import { supabase } from '../lib/supabase';
-import { User, ReferralService, DBService } from '../types';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { User, ReferralService } from '../types';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -14,10 +13,41 @@ export const Login: React.FC = () => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const performMockLogin = async () => {
+       await new Promise(r => setTimeout(r, 800));
+       
+       const mockUser: User = {
+          id: 'mock-user-demo',
+          name: 'Demo Kullanıcı',
+          avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop',
+          rating: 4.9,
+          location: 'İstanbul',
+          goldenHearts: 12,
+          silverHearts: 3,
+          isAvailable: true,
+          referralCode: 'DEMO123',
+          wallet: {
+            balance: 250.00,
+            totalEarnings: 850.00,
+            pendingBalance: 0
+          }
+       };
+
+       ReferralService.saveUserProfile(mockUser);
+       navigate('/app'); 
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+
+    // If Supabase is not configured, force mock login
+    if (!isSupabaseConfigured()) {
+       await performMockLogin();
+       setIsLoading(false);
+       return;
+    }
 
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -66,6 +96,12 @@ export const Login: React.FC = () => {
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true);
     setError(null);
+
+    if (!isSupabaseConfigured()) {
+        await performMockLogin();
+        setIsGoogleLoading(false);
+        return;
+    }
 
     try {
         const { error } = await supabase.auth.signInWithOAuth({
@@ -156,6 +192,14 @@ export const Login: React.FC = () => {
         </form>
 
         <div className="grid gap-3 mt-4">
+            <button 
+                type="button"
+                onClick={performMockLogin}
+                className="w-full flex items-center justify-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold py-3.5 rounded-xl hover:bg-emerald-100 transition-all active:scale-[0.98] text-sm"
+            >
+                <UserCheck size={18} /> Demo (Misafir) Girişi
+            </button>
+
             <button 
                 type="button"
                 onClick={handleGoogleLogin}
