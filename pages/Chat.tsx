@@ -18,7 +18,7 @@ export const Chat: React.FC = () => {
     document.body.appendChild(script);
 
     return () => {
-      // Component unmount olduğunda temizlik yap
+      // Component unmount olduğunda temizlik yap (Opsiyonel, RumbleTalk bazen global kalmak isteyebilir ama SPA için temizlik iyidir)
       const scripts = document.querySelectorAll('script[src*="rumbletalk.com"]');
       scripts.forEach(s => s.remove());
     };
