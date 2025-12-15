@@ -14,36 +14,29 @@ export const SwapList: React.FC = () => {
   const currentUser = ReferralService.getUserProfile();
 
   const loadListings = async () => {
-    setLoading(true);
-    let isMounted = true;
-
-    // Safety timeout
-    const timeout = setTimeout(() => {
-        if (isMounted) setLoading(false);
-    }, 5000);
-
+    // Only show full loader on first load, otherwise background refresh
+    if (listings.length === 0) setLoading(true);
+    
     try {
       const data = await SwapService.getListings();
-      if (isMounted) {
-        if (Array.isArray(data)) {
-            setListings(data);
-        } else {
-            setListings([]);
-        }
+      if (Array.isArray(data)) {
+        setListings(data);
+      } else {
+        setListings([]);
       }
     } catch (e) {
       console.error("List load error", e);
-      if (isMounted) setListings([]);
     } finally {
-      clearTimeout(timeout);
-      if (isMounted) setLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => { 
-      let isMounted = true;
       loadListings();
-      return () => { isMounted = false; };
+      // Listen for local storage updates (when user creates an item)
+      const handleStorage = () => loadListings();
+      window.addEventListener('storage', handleStorage);
+      return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {

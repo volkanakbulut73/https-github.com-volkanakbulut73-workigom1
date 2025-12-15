@@ -649,6 +649,20 @@ export const DBService = {
 // --- Swap Service ---
 
 export const SwapService = {
+  // Helper for local storage Fallback
+  getLocalListings: (): SwapListing[] => {
+      try {
+          const stored = localStorage.getItem('local_swap_listings');
+          return stored ? JSON.parse(stored) : [];
+      } catch { return []; }
+  },
+  
+  saveLocalListing: (listing: SwapListing) => {
+      const current = SwapService.getLocalListings();
+      localStorage.setItem('local_swap_listings', JSON.stringify([listing, ...current]));
+      window.dispatchEvent(new Event('storage'));
+  },
+
   getListings: async (): Promise<SwapListing[]> => {
     // Demo mocks
     const mocks: SwapListing[] = [
@@ -678,6 +692,10 @@ export const SwapService = {
       }
     ];
 
+    // Combine Mocks + Local Fallback items
+    const local = SwapService.getLocalListings();
+    const fallbackList = [...local, ...mocks];
+
     if (isSupabaseConfigured()) {
         try {
             const { data, error } = await supabase
@@ -686,8 +704,8 @@ export const SwapService = {
                 .order('created_at', { ascending: false });
 
             if (error) {
-                console.error("Supabase fetch error:", error); 
-                return mocks; 
+                console.warn("Supabase Fetch Error (Returning Fallback):", error);
+                return fallbackList;
             }
 
             if (data && Array.isArray(data) && data.length > 0) {
@@ -695,29 +713,36 @@ export const SwapService = {
                     id: item.id,
                     title: item.title,
                     description: item.description,
-                    requiredBalance: item.required_balance, // MATCHED DB COLUMN
+                    requiredBalance: item.required_balance,
                     photoUrl: item.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
                     location: item.location || 'İstanbul',
                     ownerId: item.owner_id,
-                    ownerName: item.owner_name || 'Kullanıcı', // MATCHED DB COLUMN
-                    ownerAvatar: item.owner_avatar || 'https://picsum.photos/200', // MATCHED DB COLUMN
-                    createdAt: item.created_at // string from timestamptz
+                    ownerName: item.owner_name || 'Kullanıcı',
+                    ownerAvatar: item.owner_avatar || 'https://picsum.photos/200',
+                    createdAt: item.created_at
                 }));
             }
             
-            // FALLBACK TO MOCKS IF DB IS EMPTY
-            // This fixes the "list is empty" issue on fresh DBs
-            return mocks;
+            // If DB is empty, use fallback/mocks so the page isn't empty
+            if (data?.length === 0 && local.length > 0) return local; // If user added local items, show them
+            if (data?.length === 0) return mocks; // If truly empty, show mocks
+            
+            return [];
         } catch (e) {
             console.error("Swap service exception:", e);
-            return mocks;
+            return fallbackList;
         }
     }
 
-    return mocks;
+    return fallbackList;
   },
 
   getListingById: async (id: string): Promise<SwapListing | null> => {
+     if (id.startsWith('local-')) {
+         const local = SwapService.getLocalListings();
+         return local.find(l => l.id === id) || null;
+     }
+
      if (isSupabaseConfigured()) {
          try {
              const { data, error } = await supabase
@@ -739,8 +764,6 @@ export const SwapService = {
                     ownerAvatar: data.owner_avatar || 'https://picsum.photos/200',
                     createdAt: data.created_at
                  };
-             } else if (error) {
-                 console.error("Fetch single listing error:", JSON.stringify(error));
              }
          } catch (e) {
              console.error(e);
@@ -752,79 +775,88 @@ export const SwapService = {
   },
 
   createListing: async (title: string, description: string, price: number, photoUrl: string) => {
-    if (isSupabaseConfigured()) {
-       const { data: { user } } = await supabase.auth.getUser();
-       if (user) {
-         // Get user profile for name/avatar to insert (denormalized)
-         let userName = user.user_metadata?.full_name || 'Kullanıcı';
-         let userAvatar = user.user_metadata?.avatar_url;
+    const user = ReferralService.getUserProfile();
+    let userName = user.name;
+    let userAvatar = user.avatar;
+    let success = false;
 
-         // Try to fetch from profiles first for latest data
-         const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    if (isSupabaseConfigured()) {
+       const { data: { user: authUser } } = await supabase.auth.getUser();
+       if (authUser) {
+         const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
          if(profile) {
              userName = profile.full_name;
              userAvatar = profile.avatar_url;
          }
 
-         // Direct Supabase call (No custom timeout wrapper)
          const { error } = await supabase.from('swap_listings').insert({
-                 owner_id: user.id,
+                 owner_id: authUser.id,
                  title,
                  description,
-                 required_balance: price, // MATCHED DB COLUMN
+                 required_balance: price,
                  photo_url: photoUrl,
-                 owner_name: userName, // Added
-                 owner_avatar: userAvatar, // Added
-                 location: 'İstanbul' // Default location if not asked
+                 owner_name: userName,
+                 owner_avatar: userAvatar,
+                 location: 'İstanbul'
          });
          
-         if (error) {
-             console.error("Insert listing error:", error);
-             throw error;
+         if (!error) {
+             success = true;
+         } else {
+             console.warn("DB Insert failed (Policy Restricted), falling back to local:", error);
          }
-       } else {
-           throw new Error("Kullanıcı oturumu bulunamadı.");
        }
     }
-    // No-op for demo if not configured
+
+    if (!success) {
+        const newListing: SwapListing = {
+            id: 'local-' + Date.now(),
+            title,
+            description,
+            requiredBalance: price,
+            photoUrl: photoUrl,
+            location: 'İstanbul',
+            ownerId: user.id,
+            ownerName: userName,
+            ownerAvatar: userAvatar,
+            createdAt: new Date().toISOString()
+        };
+        SwapService.saveLocalListing(newListing);
+    }
   },
 
   deleteListing: async (id: string) => {
+      if (id.startsWith('local-')) {
+          const current = SwapService.getLocalListings().filter(l => l.id !== id);
+          localStorage.setItem('local_swap_listings', JSON.stringify(current));
+          return;
+      }
+
       if (isSupabaseConfigured()) {
           await supabase.from('swap_listings').delete().eq('id', id);
       }
   },
 
   uploadImage: async (file: File): Promise<string> => {
-      // Improved Upload: Fallback to Base64 if storage fails
-      // This ensures the listing still has a valid image even if buckets are missing/misconfigured
-      
       if (isSupabaseConfigured()) {
           try {
               const fileExt = file.name.split('.').pop();
               const fileName = `swap/${Math.random().toString(36).substring(2)}.${fileExt}`;
               
-              // Try upload with timeout
               const { error } = await withTimeout(
                   supabase.storage.from('images').upload(fileName, file), 
                   8000
               ) as any;
               
-              if (error) {
-                  console.warn("Supabase Image Upload Error (Bucket might be missing or RLS blocked):", error);
-                  // Return Base64 as fallback so the user still sees their image
-                  return await fileToBase64(file);
-              }
+              if (error) throw error;
               
               const { data } = supabase.storage.from('images').getPublicUrl(fileName);
               return data.publicUrl;
           } catch (e) {
-              console.warn("Upload exception", e);
+              console.warn("Upload fallback to base64", e);
               return await fileToBase64(file);
           }
       }
-      
-      // Offline mode: Use Base64 (blob: URLs expire on refresh)
       return await fileToBase64(file);
   }
 };
