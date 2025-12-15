@@ -659,12 +659,13 @@ export const SwapService = {
   
   saveLocalListing: (listing: SwapListing) => {
       const current = SwapService.getLocalListings();
-      localStorage.setItem('local_swap_listings', JSON.stringify([listing, ...current]));
+      // Add new listing at the beginning, ensuring uniqueness
+      const filtered = current.filter(l => l.id !== listing.id);
+      localStorage.setItem('local_swap_listings', JSON.stringify([listing, ...filtered]));
       window.dispatchEvent(new Event('storage'));
   },
 
   getListings: async (): Promise<SwapListing[]> => {
-    // Demo mocks
     const mocks: SwapListing[] = [
       {
         id: '1',
@@ -692,24 +693,17 @@ export const SwapService = {
       }
     ];
 
-    // Combine Mocks + Local Fallback items
+    // 1. Get Local Items (These are user created items or cached items)
     const local = SwapService.getLocalListings();
-    const fallbackList = [...local, ...mocks];
+    
+    let remote: SwapListing[] = [];
 
+    // 2. Try Fetch DB
     if (isSupabaseConfigured()) {
         try {
-            const { data, error } = await supabase
-                .from('swap_listings')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            if (error) {
-                console.warn("Supabase Fetch Error (Returning Fallback):", error);
-                return fallbackList;
-            }
-
-            if (data && Array.isArray(data) && data.length > 0) {
-                return data.map((item: any) => ({
+            const { data, error } = await supabase.from('swap_listings').select('*').order('created_at', { ascending: false });
+            if (!error && data) {
+                remote = data.map((item: any) => ({
                     id: item.id,
                     title: item.title,
                     description: item.description,
@@ -722,28 +716,45 @@ export const SwapService = {
                     createdAt: item.created_at
                 }));
             }
-            
-            // If DB is empty, use fallback/mocks so the page isn't empty
-            if (data?.length === 0 && local.length > 0) return local; // If user added local items, show them
-            if (data?.length === 0) return mocks; // If truly empty, show mocks
-            
-            return [];
         } catch (e) {
-            console.error("Swap service exception:", e);
-            return fallbackList;
+            console.warn("DB Fetch Warning (using local/mocks):", e);
         }
     }
 
-    return fallbackList;
+    // 3. Merge Strategies
+    // Create a map by ID to deduplicate (Remote beats Local usually, but Local might be newer if offline)
+    // Here we assume Remote is source of truth, but we keep Local items that aren't in Remote yet (e.g. failed uploads)
+    const combinedMap = new Map<string, SwapListing>();
+    
+    // Add local first
+    local.forEach(item => combinedMap.set(item.id, item));
+    
+    // Add/Overwrite with remote (so updated remote items refresh local stale ones)
+    remote.forEach(item => combinedMap.set(item.id, item));
+    
+    const combined = Array.from(combinedMap.values());
+    
+    // If combined is absolutely empty (new user, empty DB), show Mocks for demo feel
+    // But if user has created something locally, show that + mocks? Or just that?
+    // Let's just append Mocks if we have very little data to populate the UI
+    if (combined.length === 0) {
+        return mocks;
+    }
+
+    // Sort by createdAt desc
+    combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return combined;
   },
 
   getListingById: async (id: string): Promise<SwapListing | null> => {
-     if (id.startsWith('local-')) {
-         const local = SwapService.getLocalListings();
-         return local.find(l => l.id === id) || null;
-     }
+     // Check local first (fast)
+     const local = SwapService.getLocalListings();
+     const foundLocal = local.find(l => l.id === id);
+     if (foundLocal) return foundLocal;
 
-     if (isSupabaseConfigured()) {
+     // Fetch from DB
+     if (isSupabaseConfigured() && !id.startsWith('local-')) {
          try {
              const { data, error } = await supabase
                  .from('swap_listings')
@@ -770,6 +781,7 @@ export const SwapService = {
          }
      }
      
+     // Fallback to mocks
      const all = await SwapService.getListings();
      return all.find(l => l.id === id) || null;
   },
@@ -778,18 +790,20 @@ export const SwapService = {
     const user = ReferralService.getUserProfile();
     let userName = user.name;
     let userAvatar = user.avatar;
-    let success = false;
+    let finalListing: SwapListing | null = null;
 
     if (isSupabaseConfigured()) {
        const { data: { user: authUser } } = await supabase.auth.getUser();
        if (authUser) {
+         // Get latest profile info
          const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
          if(profile) {
              userName = profile.full_name;
              userAvatar = profile.avatar_url;
          }
 
-         const { error } = await supabase.from('swap_listings').insert({
+         // Try DB Insert
+         const { data, error } = await supabase.from('swap_listings').insert({
                  owner_id: authUser.id,
                  title,
                  description,
@@ -798,18 +812,31 @@ export const SwapService = {
                  owner_name: userName,
                  owner_avatar: userAvatar,
                  location: 'İstanbul'
-         });
+         }).select().single();
          
-         if (!error) {
-             success = true;
+         if (data && !error) {
+             // Success: Use the real DB item
+             finalListing = {
+                id: data.id,
+                title: data.title,
+                description: data.description,
+                requiredBalance: data.required_balance,
+                photoUrl: data.photo_url,
+                location: data.location,
+                ownerId: data.owner_id,
+                ownerName: data.owner_name,
+                ownerAvatar: data.owner_avatar,
+                createdAt: data.created_at
+             };
          } else {
-             console.warn("DB Insert failed (Policy Restricted), falling back to local:", error);
+             console.warn("DB Insert failed or RLS blocked return. Using Local Fallback.", error);
          }
        }
     }
 
-    if (!success) {
-        const newListing: SwapListing = {
+    // If DB failed or returned nothing (due to RLS 'insert' policy but no 'select' policy?), create a local fallback
+    if (!finalListing) {
+        finalListing = {
             id: 'local-' + Date.now(),
             title,
             description,
@@ -821,18 +848,20 @@ export const SwapService = {
             ownerAvatar: userAvatar,
             createdAt: new Date().toISOString()
         };
-        SwapService.saveLocalListing(newListing);
     }
+
+    // ALWAYS save to local storage (as cache or fallback)
+    SwapService.saveLocalListing(finalListing);
   },
 
   deleteListing: async (id: string) => {
-      if (id.startsWith('local-')) {
-          const current = SwapService.getLocalListings().filter(l => l.id !== id);
-          localStorage.setItem('local_swap_listings', JSON.stringify(current));
-          return;
-      }
+      // Delete from local
+      const current = SwapService.getLocalListings().filter(l => l.id !== id);
+      localStorage.setItem('local_swap_listings', JSON.stringify(current));
+      window.dispatchEvent(new Event('storage'));
 
-      if (isSupabaseConfigured()) {
+      // Delete from DB
+      if (isSupabaseConfigured() && !id.startsWith('local-')) {
           await supabase.from('swap_listings').delete().eq('id', id);
       }
   },
