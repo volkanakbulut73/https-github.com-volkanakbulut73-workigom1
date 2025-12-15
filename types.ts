@@ -142,7 +142,8 @@ export const formatName = (fullName: string): string => {
 const isUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
 // Helper to convert File to Base64 (Prevents blob: URL errors)
-const fileToBase64 = (file: File): Promise<string> => {
+// EXPORTED NOW
+export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -152,7 +153,7 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 // Timeout helper to prevent hanging requests
-const withTimeout = <T>(promise: PromiseLike<T>, ms: number = 8000, fallbackValue?: T): Promise<T> => {
+const withTimeout = <T>(promise: PromiseLike<T>, ms: number = 2000, fallbackValue?: T): Promise<T> => {
     return Promise.race([
         Promise.resolve(promise),
         new Promise<T>((resolve, reject) => 
@@ -271,7 +272,11 @@ export const DBService = {
   getUserProfile: async (id: string): Promise<User | null> => {
     if (isSupabaseConfigured()) {
        try {
-           const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
+           const { data, error } = await withTimeout(
+               supabase.from('profiles').select('*').eq('id', id).single(),
+               2000
+           );
+           
            if (error && error.code !== 'PGRST116') { // Ignore 'not found' error
                console.warn("Profile fetch error:", error);
            }
@@ -306,45 +311,59 @@ export const DBService = {
   getUnreadCounts: async (id: string) => {
      if(!isSupabaseConfigured()) return { messages: 1, notifications: 0 };
      
-     // Count unread messages
-     const { count } = await supabase
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('receiver_id', id)
-        .eq('is_read', false);
-
-     return { messages: count || 0, notifications: 0 };
+     try {
+         // Count unread messages with timeout
+         const { count } = await withTimeout(
+            supabase
+                .from('messages')
+                .select('*', { count: 'exact', head: true })
+                .eq('receiver_id', id)
+                .eq('is_read', false),
+            2000,
+            { count: 0 } as any
+         );
+         return { messages: count || 0, notifications: 0 };
+     } catch {
+         return { messages: 0, notifications: 0 };
+     }
   },
 
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
     if (isSupabaseConfigured()) {
-        const { data } = await supabase
-            .from('transactions')
-            .select(`*, seeker:seeker_id(full_name), supporter:supporter_id(full_name)`)
-            .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
-            .neq('status', 'dismissed')
-            .neq('status', 'cancelled')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
+        try {
+            const { data } = await withTimeout(
+                supabase
+                    .from('transactions')
+                    .select(`*, seeker:seeker_id(full_name), supporter:supporter_id(full_name)`)
+                    .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
+                    .neq('status', 'dismissed')
+                    .neq('status', 'cancelled')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single(),
+                2500
+            );
 
-        if (data) {
-            return {
-                id: data.id,
-                seekerId: data.seeker_id,
-                supporterId: data.supporter_id,
-                amount: data.amount,
-                listingTitle: data.listing_title,
-                status: data.status,
-                supportPercentage: data.support_percentage,
-                qrUrl: data.qr_url,
-                createdAt: data.created_at,
-                qrUploadedAt: data.qr_uploaded_at,
-                completedAt: data.completed_at,
-                seekerName: formatName(data.seeker?.full_name),
-                supporterName: data.supporter ? formatName(data.supporter.full_name) : undefined,
-                amounts: calculateTransaction(data.amount, data.support_percentage)
-            };
+            if (data) {
+                return {
+                    id: data.id,
+                    seekerId: data.seeker_id,
+                    supporterId: data.supporter_id,
+                    amount: data.amount,
+                    listingTitle: data.listing_title,
+                    status: data.status,
+                    supportPercentage: data.support_percentage,
+                    qrUrl: data.qr_url,
+                    createdAt: data.created_at,
+                    qrUploadedAt: data.qr_uploaded_at,
+                    completedAt: data.completed_at,
+                    seekerName: formatName(data.seeker?.full_name),
+                    supporterName: data.supporter ? formatName(data.supporter.full_name) : undefined,
+                    amounts: calculateTransaction(data.amount, data.support_percentage)
+                };
+            }
+        } catch (e) {
+            // timeout fall through
         }
     }
     return TransactionService.getActive();
@@ -372,12 +391,19 @@ export const DBService = {
 
   getPendingTransactions: async (): Promise<any[]> => { 
     if (isSupabaseConfigured()) {
-        const { data } = await supabase
-            .from('transactions')
-            .select(`*, profiles:seeker_id(full_name, avatar_url, rating)`)
-            .eq('status', 'waiting-supporter')
-            .order('created_at', { ascending: false });
-        return data || [];
+        try {
+            const { data } = await withTimeout(
+                supabase
+                    .from('transactions')
+                    .select(`*, profiles:seeker_id(full_name, avatar_url, rating)`)
+                    .eq('status', 'waiting-supporter')
+                    .order('created_at', { ascending: false }),
+                3000 // slightly longer for lists
+            );
+            return data || [];
+        } catch {
+            return [];
+        }
     }
     return []; 
   },
@@ -507,80 +533,89 @@ export const DBService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
 
-    // Fetch all messages where I am sender or receiver
-    const { data: messages, error } = await supabase
-        .from('messages')
-        .select(`
-            *,
-            sender:sender_id(full_name, avatar_url),
-            receiver:receiver_id(full_name, avatar_url)
-        `)
-        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-        .order('created_at', { ascending: false });
+    try {
+        // Fetch all messages where I am sender or receiver with timeout
+        const { data: messages, error } = await withTimeout(
+            supabase
+                .from('messages')
+                .select(`
+                    *,
+                    sender:sender_id(full_name, avatar_url),
+                    receiver:receiver_id(full_name, avatar_url)
+                `)
+                .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+                .order('created_at', { ascending: false }),
+            2000
+        );
 
-    if (error) {
-        console.error("Inbox error:", error);
+        if (error) throw error;
+        if (!messages) return [];
+
+        const conversations = new Map();
+
+        messages.forEach((msg: any) => {
+            const isMeSender = msg.sender_id === user.id;
+            const otherId = isMeSender ? msg.receiver_id : msg.sender_id;
+            const otherProfile = isMeSender ? msg.receiver : msg.sender;
+
+            if (!conversations.has(otherId)) {
+                conversations.set(otherId, {
+                    id: otherId,
+                    name: formatName(otherProfile?.full_name || 'Kullanıcı'),
+                    avatar: otherProfile?.avatar_url || 'https://picsum.photos/100',
+                    lastMsg: msg.content,
+                    time: new Date(msg.created_at),
+                    unread: 0
+                });
+            }
+
+            // Count unread if I am the receiver and message is not read
+            if (!isMeSender && !msg.is_read) {
+                const conv = conversations.get(otherId);
+                conv.unread += 1;
+            }
+        });
+
+        return Array.from(conversations.values());
+    } catch (e) {
+        console.warn("Inbox fetch slow or failed", e);
         return [];
     }
-
-    const conversations = new Map();
-
-    messages.forEach((msg: any) => {
-        const isMeSender = msg.sender_id === user.id;
-        const otherId = isMeSender ? msg.receiver_id : msg.sender_id;
-        const otherProfile = isMeSender ? msg.receiver : msg.sender;
-
-        if (!conversations.has(otherId)) {
-            conversations.set(otherId, {
-                id: otherId,
-                name: formatName(otherProfile?.full_name || 'Kullanıcı'),
-                avatar: otherProfile?.avatar_url || 'https://picsum.photos/100',
-                lastMsg: msg.content,
-                time: new Date(msg.created_at),
-                unread: 0
-            });
-        }
-
-        // Count unread if I am the receiver and message is not read
-        if (!isMeSender && !msg.is_read) {
-            const conv = conversations.get(otherId);
-            conv.unread += 1;
-        }
-    });
-
-    return Array.from(conversations.values());
   },
 
   getChatHistory: async (otherUserId: string, lastTime?: number): Promise<Message[]> => { 
     if (!isSupabaseConfigured()) {
-        // Return mock messages if offline
         return MOCK_MESSAGES;
     }
     
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
 
-    let query = supabase
-        .from('messages')
-        .select('*')
-        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user.id})`)
-        .order('created_at', { ascending: true });
+    try {
+        let query = supabase
+            .from('messages')
+            .select('*')
+            .or(`and(sender_id.eq.${user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user.id})`)
+            .order('created_at', { ascending: true });
 
-    if (lastTime) {
-        query = query.gt('created_at', new Date(lastTime).toISOString());
+        if (lastTime) {
+            query = query.gt('created_at', new Date(lastTime).toISOString());
+        }
+
+        const { data, error } = await withTimeout(query, 2000);
+        if (error) return [];
+
+        return data.map((msg: any) => ({
+            id: msg.id,
+            senderId: msg.sender_id,
+            receiverId: msg.receiver_id,
+            content: msg.content,
+            createdAt: new Date(msg.created_at).getTime(),
+            isRead: msg.is_read
+        }));
+    } catch {
+        return [];
     }
-
-    const { data, error } = await query;
-    if (error) return [];
-
-    return data.map((msg: any) => ({
-        id: msg.id,
-        senderId: msg.sender_id,
-        receiverId: msg.receiver_id,
-        content: msg.content,
-        createdAt: new Date(msg.created_at).getTime(),
-        isRead: msg.is_read
-    }));
   },
 
   markAsRead: async (otherUserId: string) => {
@@ -650,30 +685,34 @@ export const DBService = {
         { id: '1', channelId: 'general', senderId: 'user-2', senderName: 'Mert', senderAvatar: 'https://picsum.photos/100?random=2', content: 'Selamlar herkese!', createdAt: new Date().toISOString() }
     ];
     
-    const { data, error } = await supabase
-        .from('channel_messages')
-        .select(`
-            *,
-            sender:sender_id(full_name, avatar_url)
-        `)
-        .eq('channel_id', channelId)
-        .order('created_at', { ascending: true })
-        .limit(100);
+    try {
+        const { data, error } = await withTimeout(
+            supabase
+                .from('channel_messages')
+                .select(`
+                    *,
+                    sender:sender_id(full_name, avatar_url)
+                `)
+                .eq('channel_id', channelId)
+                .order('created_at', { ascending: true })
+                .limit(100),
+            2000
+        );
 
-    if (error) {
-        console.error("Channel msg error:", error);
+        if (error) throw error;
+
+        return data.map((msg: any) => ({
+            id: msg.id,
+            channelId: msg.channel_id,
+            senderId: msg.sender_id,
+            senderName: formatName(msg.sender?.full_name),
+            senderAvatar: msg.sender?.avatar_url || 'https://picsum.photos/100',
+            content: msg.content,
+            createdAt: msg.created_at
+        }));
+    } catch {
         return [];
     }
-
-    return data.map((msg: any) => ({
-        id: msg.id,
-        channelId: msg.channel_id,
-        senderId: msg.sender_id,
-        senderName: formatName(msg.sender?.full_name),
-        senderAvatar: msg.sender?.avatar_url || 'https://picsum.photos/100',
-        content: msg.content,
-        createdAt: msg.created_at
-    }));
   },
 
   sendChannelMessage: async (channelId: string, content: string) => {
@@ -728,13 +767,16 @@ const MOCK_LISTINGS: SwapListing[] = [
 export const SwapService = {
 
   getListings: async (): Promise<SwapListing[]> => {
-    // If Supabase is configured, try to fetch real data
+    // If Supabase is configured, try to fetch real data with FAST TIMEOUT
     if (isSupabaseConfigured()) {
         try {
-            const { data, error } = await supabase
-                .from('swap_listings')
-                .select('*')
-                .order('created_at', { ascending: false });
+            const { data, error } = await withTimeout(
+                supabase
+                    .from('swap_listings')
+                    .select('*')
+                    .order('created_at', { ascending: false }),
+                2000 // 2 seconds strict timeout before fallback
+            );
 
             if (!error && data && data.length > 0) {
                 return data.map((item: any) => ({
@@ -751,11 +793,11 @@ export const SwapService = {
                 }));
             }
         } catch (e) {
-            console.error("Supabase fetch error, falling back to mock:", e);
+            console.warn("Supabase fetch slow/failed, falling back to mock");
         }
     }
     
-    // Fallback to Mock Data if offline or empty (for demo purposes)
+    // Fallback to Mock Data if offline or empty or slow
     return MOCK_LISTINGS;
   },
 
@@ -764,11 +806,14 @@ export const SwapService = {
 
      if (isSupabaseConfigured()) {
          try {
-             const { data, error } = await supabase
-                 .from('swap_listings')
-                 .select('*')
-                 .eq('id', id)
-                 .single();
+             const { data, error } = await withTimeout(
+                 supabase
+                     .from('swap_listings')
+                     .select('*')
+                     .eq('id', id)
+                     .single(),
+                 2000
+             );
              
              if (data && !error) {
                  realData = {

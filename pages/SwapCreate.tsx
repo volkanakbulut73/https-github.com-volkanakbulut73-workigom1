@@ -3,7 +3,7 @@ import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Camera, Wallet, X } from 'lucide-react';
 import { Button } from '../components/Button';
-import { SwapService } from '../types';
+import { SwapService, fileToBase64 } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const SwapCreate: React.FC = () => {
@@ -23,7 +23,7 @@ export const SwapCreate: React.FC = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) { 
@@ -31,8 +31,13 @@ export const SwapCreate: React.FC = () => {
         return;
       }
       setSelectedFile(file);
-      const objectUrl = URL.createObjectURL(file);
-      setSelectedImage(objectUrl);
+      // Use Base64 instead of blob object URL to prevent revoked blob errors
+      try {
+        const base64 = await fileToBase64(file);
+        setSelectedImage(base64);
+      } catch (e) {
+        console.error("Preview error", e);
+      }
     }
   };
 

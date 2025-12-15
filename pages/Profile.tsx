@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Mail, MapPin, Award, TrendingUp, Star, Camera, ShieldCheck, Heart, Zap, ChevronLeft, LogOut, Database, Wifi, Edit2, Check, X, Loader2 } from 'lucide-react';
-import { ReferralService, DBService } from '../types';
+import { ReferralService, DBService, fileToBase64 } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const Profile: React.FC = () => {
@@ -54,7 +54,7 @@ export const Profile: React.FC = () => {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
         if (file.size > 5 * 1024 * 1024) {
@@ -62,8 +62,12 @@ export const Profile: React.FC = () => {
             return;
         }
         setSelectedFile(file);
-        const objectUrl = URL.createObjectURL(file);
-        setPreviewAvatar(objectUrl);
+        try {
+            const base64 = await fileToBase64(file);
+            setPreviewAvatar(base64);
+        } catch (err) {
+            console.error(err);
+        }
     }
   };
 
