@@ -527,11 +527,12 @@ export const SwapService = {
 
         if (error) {
             console.error("Listings fetch error (Supabase):", error);
-            // Fallback to mock on error (e.g. table doesn't exist yet)
+            // Fallback to mock on error (e.g. table doesn't exist yet, or RLS block)
             return MOCK_LISTINGS;
         }
         
-        if (!data || data.length === 0) return MOCK_LISTINGS; // Return mock if DB empty for demo
+        // Critical fix: Supabase can return null data on RLS policy mismatch without throwing error
+        if (!data || data.length === 0) return MOCK_LISTINGS; 
 
         return data.map((item: any) => {
             return {

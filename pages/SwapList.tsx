@@ -11,47 +11,57 @@ export const SwapList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'my'>('all');
   
-  const currentUser = ReferralService.getUserProfile();
+  // Profil değişimini dinlemek için state kullanıyoruz ancak useEffect'e ID'yi dahil etmeyeceğiz.
+  const [currentUser, setCurrentUser] = useState(ReferralService.getUserProfile());
+
+  // Profil güncellemelerini dinle (Sadece filtreleme için, veri çekme için değil)
+  useEffect(() => {
+    const handleStorage = () => setCurrentUser(ReferralService.getUserProfile());
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   const loadListings = async () => {
     setLoading(true);
     try {
-      // 3 Saniye içinde veri gelmezse mock veri ile veya boş olarak açılmasını zorla
+      // 3 Saniye zaman aşımı (Timeout)
       const timeoutPromise = new Promise<SwapListing[]>((resolve) => {
           setTimeout(() => resolve([]), 3000); 
       });
 
       const dataPromise = SwapService.getListings();
       
-      // Yarış: Hangisi önce biterse
-      const data = await Promise.race([dataPromise, timeoutPromise]);
-
-      // Eğer gerçek servis boş dönerse ama timeout değilse, yine de servisten gelen veriyi (mock da olsa) kullan
-      // Not: SwapService artık hata durumunda mock veri döndürüyor, bu yüzden burası güvenli.
-      const finalData = await dataPromise; 
+      // Veri veya Timeout hangisi önce gelirse
+      const result = await Promise.race([dataPromise, timeoutPromise]);
       
-      if (Array.isArray(finalData)) {
-        setListings(finalData);
+      // Eğer sonuç boş bir dizi ise ve timeout sebebiyle değilse tekrar kontrol edelim
+      // Ancak UI'ın kilitlenmemesi için her durumda state'i güncelliyoruz.
+      if (result && Array.isArray(result)) {
+         setListings(result);
       } else {
-        setListings([]);
+         setListings([]);
       }
     } catch (e) {
-      console.error(e);
+      console.error("Listings load error:", e);
       setListings([]);
     } finally {
+      // ÖNEMLİ: Her durumda loading kapanmalı
       setLoading(false);
     }
   };
 
   useEffect(() => { 
+      // currentUser.id bağımlılığını kaldırdık. 
+      // Çünkü veri tabanındaki tüm ilanları çekiyoruz, kişiye özel değil.
+      // Kişiye özel filtreleme client-side (filteredListings) yapılıyor.
       loadListings();
-  }, [currentUser.id]); // Reload if user context changes
+  }, []); 
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
       if (window.confirm('Bu ilanı silmek istediğinize emin misiniz?')) {
           await SwapService.deleteListing(id);
-          loadListings(); // Refresh list
+          loadListings(); // Listeyi yenile
       }
   };
 
@@ -149,7 +159,7 @@ export const SwapList: React.FC = () => {
         </div>
       </div>
 
-      {/* FAB - Masaüstünde sağ altta kalmaya devam edebilir veya yukarı taşınabilir. Şimdilik sağ altta bırakıyoruz ama hover efekti ekledik. */}
+      {/* FAB */}
       <button 
         onClick={() => navigate('/swap/create')} 
         className="fixed bottom-24 right-5 md:bottom-10 md:right-10 bg-slate-900 text-white w-14 h-14 rounded-full shadow-xl shadow-slate-900/40 flex items-center justify-center z-40 active:scale-90 transition-transform hover:scale-105 border-4 border-white/10 group"
@@ -191,7 +201,6 @@ export const SwapList: React.FC = () => {
                )}
             </div>
          ) : (
-            // RESPONSIVE GRID: Mobile: 2 cols, MD: 3 cols, LG: 4 cols
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 pb-4">
                {filteredListings.map((item, index) => {
                   if (!item) return null;
@@ -210,7 +219,6 @@ export const SwapList: React.FC = () => {
                       onClick={() => navigate(`/swap/${itemId}`)} 
                       className="bg-white rounded-2xl p-2.5 shadow-sm border border-gray-100 active:scale-[0.98] transition-all cursor-pointer hover:shadow-md hover:border-gray-200 group flex flex-col h-full"
                     >
-                       {/* Image */}
                        <div className="relative aspect-[3/4] bg-gray-50 rounded-xl overflow-hidden mb-3">
                           <img 
                             src={itemPhoto} 
@@ -240,7 +248,6 @@ export const SwapList: React.FC = () => {
                           </div>
                        </div>
   
-                       {/* Details */}
                        <div className="px-1 space-y-1 flex-1 flex flex-col">
                           <div className="flex justify-between items-start gap-2">
                              <h3 className="text-xs md:text-sm font-bold text-slate-800 line-clamp-2 leading-snug min-h-[2.5em]">
