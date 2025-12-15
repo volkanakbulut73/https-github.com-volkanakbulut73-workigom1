@@ -26,11 +26,18 @@ export const Profile: React.FC = () => {
   }, []);
 
   const handleLogout = async () => {
-    if (isConnected) {
-        await supabase.auth.signOut();
-    }
+    // 1. Önce yerel veriyi temizle ve yönlendir (Kullanıcıyı bekletme)
     ReferralService.logout();
     navigate('/login');
+
+    // 2. Ardından Supabase oturumunu kapatmayı dene
+    if (isConnected) {
+        try {
+            await supabase.auth.signOut();
+        } catch (e) {
+            console.warn("Sign out error:", e);
+        }
+    }
   };
 
   const handleEditToggle = () => {

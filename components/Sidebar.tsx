@@ -10,11 +10,18 @@ export const Sidebar: React.FC = () => {
   const user = ReferralService.getUserProfile();
 
   const handleLogout = async () => {
-    if (isSupabaseConfigured()) {
-      await supabase.auth.signOut();
-    }
+    // 1. Önce yerel veriyi temizle ve yönlendir (Kullanıcıyı bekletme)
     ReferralService.logout();
     navigate('/login');
+
+    // 2. Ardından Supabase oturumunu kapatmayı dene (Hata verirse önemli değil)
+    if (isSupabaseConfigured()) {
+      try {
+          await supabase.auth.signOut();
+      } catch (e) {
+          console.warn("Supabase signout background error:", e);
+      }
+    }
   };
 
   const NavItem = ({ to, icon: Icon, label }: { to: string, icon: any, label: string }) => (
