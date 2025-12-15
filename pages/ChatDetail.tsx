@@ -23,6 +23,7 @@ export const ChatDetail: React.FC<ChatDetailProps> = ({ overrideUserId, isSplitV
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastServerTimeRef = useRef<number>(0);
+  const isFetchingRef = useRef<boolean>(false);
 
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     if (messagesEndRef.current) {
@@ -44,26 +45,35 @@ export const ChatDetail: React.FC<ChatDetailProps> = ({ overrideUserId, isSplitV
   }, [messages.length, userId]);
 
   const fetchNewMessages = useCallback(async () => {
-    if (!userId || !currentUser) return;
+    if (!userId || !currentUser || isFetchingRef.current) return;
     
-    const lastTime = lastServerTimeRef.current;
-    const newMsgs = await DBService.getChatHistory(userId, lastTime);
+    isFetchingRef.current = true;
+    try {
+        const lastTime = lastServerTimeRef.current;
+        const newMsgs = await DBService.getChatHistory(userId, lastTime);
 
-    if (newMsgs.length > 0) {
-        const latestMsg = newMsgs[newMsgs.length - 1];
-        lastServerTimeRef.current = latestMsg.createdAt;
+        if (newMsgs.length > 0) {
+            const latestMsg = newMsgs[newMsgs.length - 1];
+            // Only update time if newer
+            if (latestMsg.createdAt > lastServerTimeRef.current) {
+                lastServerTimeRef.current = latestMsg.createdAt;
+            }
 
-        setMessages(prev => {
-            const incoming = newMsgs.filter(nm => !prev.some(pm => pm.id === nm.id));
-            if (incoming.length === 0) return prev;
-            const nextState = [...prev, ...incoming].sort((a, b) => a.createdAt - b.createdAt);
-            return nextState;
-        });
-        
-        const hasIncoming = newMsgs.some(m => m.senderId === userId);
-        if (hasIncoming) {
-             DBService.markAsRead(userId);
+            setMessages(prev => {
+                const incoming = newMsgs.filter(nm => !prev.some(pm => pm.id === nm.id));
+                if (incoming.length === 0) return prev;
+                return [...prev, ...incoming].sort((a, b) => a.createdAt - b.createdAt);
+            });
+            
+            const hasIncoming = newMsgs.some(m => m.senderId === userId);
+            if (hasIncoming) {
+                await DBService.markAsRead(userId);
+            }
         }
+    } catch (e) {
+        console.error("Poll error", e);
+    } finally {
+        isFetchingRef.current = false;
     }
   }, [userId, currentUser]);
 
@@ -75,12 +85,13 @@ export const ChatDetail: React.FC<ChatDetailProps> = ({ overrideUserId, isSplitV
       let myId = '';
       if (isSupabaseConfigured()) {
           const { data: { user } } = await supabase.auth.getUser();
-          if (!user) return; // Wait for redirect or parent handle
+          if (!user) return; 
           myId = user.id;
           setCurrentUser(user.id);
       } else {
-          myId = 'current-user';
-          setCurrentUser('current-user');
+          // If not configured, we can't chat really, but let's handle graceful fail
+          setLoading(false);
+          return;
       }
 
       if (!userId) return;
@@ -111,7 +122,7 @@ export const ChatDetail: React.FC<ChatDetailProps> = ({ overrideUserId, isSplitV
           if (!document.hidden) {
               fetchNewMessages();
           }
-      }, 3000);
+      }, 4000); // Poll slightly slower to reduce DB load
     };
 
     initChat();
@@ -119,7 +130,7 @@ export const ChatDetail: React.FC<ChatDetailProps> = ({ overrideUserId, isSplitV
     return () => {
       if (pollingInterval) clearInterval(pollingInterval);
     };
-  }, [userId, fetchNewMessages]);
+  }, [userId]); // Removed fetchNewMessages from dependency to prevent loop reset
 
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -151,7 +162,7 @@ export const ChatDetail: React.FC<ChatDetailProps> = ({ overrideUserId, isSplitV
       }
 
     } catch (error) {
-      alert("Mesaj gönderilemedi.");
+      alert("Mesaj gönderilemedi. Veritabanı hatası.");
       setMessages(prev => prev.filter(m => m.id !== tempId));
       setNewMessage(content);
     }

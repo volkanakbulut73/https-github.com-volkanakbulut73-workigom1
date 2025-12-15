@@ -142,7 +142,6 @@ export const formatName = (fullName: string): string => {
 const isUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
 // Helper to convert File to Base64 (Prevents blob: URL errors)
-// EXPORTED NOW
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -150,19 +149,6 @@ export const fileToBase64 = (file: File): Promise<string> => {
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = error => reject(error);
   });
-};
-
-// Timeout helper to prevent hanging requests
-const withTimeout = <T>(promise: PromiseLike<T>, ms: number = 2000, fallbackValue?: T): Promise<T> => {
-    return Promise.race([
-        Promise.resolve(promise),
-        new Promise<T>((resolve, reject) => 
-            setTimeout(() => {
-                if (fallbackValue !== undefined) resolve(fallbackValue);
-                else reject(new Error('Request timeout'));
-            }, ms)
-        )
-    ]);
 };
 
 export const calculateTransaction = (amount: number, percentage: 20 | 100) => {
@@ -190,16 +176,17 @@ export const calculateTransaction = (amount: number, percentage: 20 | 100) => {
 
 // --- Services ---
 
+// Default empty user for initialization, NOT for display
 const DEFAULT_USER: User = {
   id: 'current-user',
-  name: 'Misafir Kullanıcı',
+  name: 'Kullanıcı',
   avatar: 'https://picsum.photos/200',
-  rating: 5.0,
-  location: 'İstanbul',
+  rating: 0,
+  location: '',
   goldenHearts: 0,
   silverHearts: 0,
-  isAvailable: true,
-  referralCode: 'GUEST',
+  isAvailable: false,
+  referralCode: '',
   wallet: {
     balance: 0,
     totalEarnings: 0,
@@ -226,11 +213,7 @@ export const ReferralService = {
     window.dispatchEvent(new Event('storage'));
   },
   processReward: (tx: Transaction) => {
-    const user = ReferralService.getUserProfile();
-    if (tx.status === TrackerStep.COMPLETED) {
-       user.wallet.totalEarnings += 10; 
-       ReferralService.saveUserProfile(user);
-    }
+     // Backend should handle rewards in real app
   },
   getLogs: (): RewardLog[] => {
       return [];
@@ -238,12 +221,9 @@ export const ReferralService = {
 };
 
 export const TransactionService = {
-  // Local storage fallback for offline demo
+  // Local storage fallback mainly for UI state persistence across refresh
   getHistory: (): Transaction[] => {
-    try {
-      const stored = localStorage.getItem('tx_history');
-      return stored ? JSON.parse(stored) : [];
-    } catch { return []; }
+    return [];
   },
   getActive: (): Transaction | null => {
     try {
@@ -261,67 +241,51 @@ export const TransactionService = {
   }
 };
 
-const MOCK_MESSAGES: Message[] = [
-    { id: '1', senderId: 'user-2', receiverId: 'current-user', content: 'Merhaba, ilanınız hala güncel mi?', createdAt: Date.now() - 1000000, isRead: true },
-    { id: '2', senderId: 'current-user', receiverId: 'user-2', content: 'Evet, duruyor.', createdAt: Date.now() - 900000, isRead: true },
-    { id: '3', senderId: 'user-2', receiverId: 'current-user', content: 'Tamamdır, takas için uygunum.', createdAt: Date.now() - 800000, isRead: false },
-];
-
 export const DBService = {
-  // ... (previous DBService methods remain until Storage)
   getUserProfile: async (id: string): Promise<User | null> => {
-    if (isSupabaseConfigured()) {
-       try {
-           const { data, error } = await withTimeout(
-               supabase.from('profiles').select('*').eq('id', id).single(),
-               2000
-           );
-           
-           if (error && error.code !== 'PGRST116') { // Ignore 'not found' error
-               console.warn("Profile fetch error:", error);
-           }
-           
-           if (data) {
-               return {
-                 id: data.id,
-                 name: data.full_name,
-                 avatar: data.avatar_url || 'https://picsum.photos/200',
-                 rating: data.rating || 5.0,
-                 location: 'İstanbul', 
-                 goldenHearts: 0,
-                 silverHearts: 0,
-                 isAvailable: true,
-                 referralCode: 'REF',
-                 wallet: {
-                   balance: data.wallet_balance || 0,
-                   totalEarnings: 0,
-                   pendingBalance: 0
-                 }
-               };
-           }
-       } catch (e) {
-           console.error(e);
-       }
+    if (!isSupabaseConfigured()) return null;
+
+    try {
+        const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
+        
+        if (error) { 
+            console.warn("Profile fetch error:", error);
+            return null;
+        }
+        
+        if (data) {
+            return {
+                id: data.id,
+                name: data.full_name,
+                avatar: data.avatar_url || 'https://picsum.photos/200',
+                rating: data.rating || 5.0,
+                location: data.location || 'İstanbul',
+                goldenHearts: data.golden_hearts || 0,
+                silverHearts: data.silver_hearts || 0,
+                isAvailable: true,
+                referralCode: data.referral_code || 'REF',
+                wallet: {
+                balance: data.wallet_balance || 0,
+                totalEarnings: data.total_earnings || 0,
+                pendingBalance: 0
+                }
+            };
+        }
+    } catch (e) {
+        console.error(e);
     }
-    // Fallback Mock Profile
-    if (id === 'user-2') return { ...DEFAULT_USER, id: 'user-2', name: 'Mert Demir', avatar: 'https://picsum.photos/100?random=2' };
     return null;
   },
 
   getUnreadCounts: async (id: string) => {
-     if(!isSupabaseConfigured()) return { messages: 1, notifications: 0 };
+     if(!isSupabaseConfigured()) return { messages: 0, notifications: 0 };
      
      try {
-         // Count unread messages with timeout
-         const { count } = await withTimeout(
-            supabase
-                .from('messages')
-                .select('*', { count: 'exact', head: true })
-                .eq('receiver_id', id)
-                .eq('is_read', false),
-            2000,
-            { count: 0 } as any
-         );
+         const { count } = await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('receiver_id', id)
+            .eq('is_read', false);
          return { messages: count || 0, notifications: 0 };
      } catch {
          return { messages: 0, notifications: 0 };
@@ -329,83 +293,75 @@ export const DBService = {
   },
 
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
-    if (isSupabaseConfigured()) {
-        try {
-            const { data } = await withTimeout(
-                supabase
-                    .from('transactions')
-                    .select(`*, seeker:seeker_id(full_name), supporter:supporter_id(full_name)`)
-                    .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
-                    .neq('status', 'dismissed')
-                    .neq('status', 'cancelled')
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .single(),
-                2500
-            );
+    if (!isSupabaseConfigured()) return null;
 
-            if (data) {
-                return {
-                    id: data.id,
-                    seekerId: data.seeker_id,
-                    supporterId: data.supporter_id,
-                    amount: data.amount,
-                    listingTitle: data.listing_title,
-                    status: data.status,
-                    supportPercentage: data.support_percentage,
-                    qrUrl: data.qr_url,
-                    createdAt: data.created_at,
-                    qrUploadedAt: data.qr_uploaded_at,
-                    completedAt: data.completed_at,
-                    seekerName: formatName(data.seeker?.full_name),
-                    supporterName: data.supporter ? formatName(data.supporter.full_name) : undefined,
-                    amounts: calculateTransaction(data.amount, data.support_percentage)
-                };
-            }
-        } catch (e) {
-            // timeout fall through
+    try {
+        const { data } = await supabase
+            .from('transactions')
+            .select(`*, seeker:seeker_id(full_name), supporter:supporter_id(full_name)`)
+            .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
+            .neq('status', 'dismissed')
+            .neq('status', 'cancelled')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+        if (data) {
+            return {
+                id: data.id,
+                seekerId: data.seeker_id,
+                supporterId: data.supporter_id,
+                amount: data.amount,
+                listingTitle: data.listing_title,
+                status: data.status,
+                supportPercentage: data.support_percentage,
+                qrUrl: data.qr_url,
+                createdAt: data.created_at,
+                qrUploadedAt: data.qr_uploaded_at,
+                completedAt: data.completed_at,
+                seekerName: formatName(data.seeker?.full_name),
+                supporterName: data.supporter ? formatName(data.supporter.full_name) : undefined,
+                amounts: calculateTransaction(data.amount, data.support_percentage)
+            };
         }
+    } catch (e) {
+        console.error("Get Active Tx Error", e);
     }
-    return TransactionService.getActive();
+    return null;
   },
 
   createTransactionRequest: async (userId: string, amount: number, description: string) => {
-     if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
-            .from('transactions')
-            .insert({
-                seeker_id: userId,
-                amount: amount,
-                listing_title: description,
-                status: 'waiting-supporter',
-                support_percentage: 20 
-            })
-            .select()
-            .single();
-            
-        if (error) throw error;
-        return data;
-     }
-     return { id: `tx-${Date.now()}` };
+     if (!isSupabaseConfigured()) throw new Error("Veritabanı bağlantısı yok");
+
+     const { data, error } = await supabase
+        .from('transactions')
+        .insert({
+            seeker_id: userId,
+            amount: amount,
+            listing_title: description,
+            status: 'waiting-supporter',
+            support_percentage: 20 
+        })
+        .select()
+        .single();
+        
+    if (error) throw error;
+    return data;
   },
 
   getPendingTransactions: async (): Promise<any[]> => { 
-    if (isSupabaseConfigured()) {
-        try {
-            const { data } = await withTimeout(
-                supabase
-                    .from('transactions')
-                    .select(`*, profiles:seeker_id(full_name, avatar_url, rating)`)
-                    .eq('status', 'waiting-supporter')
-                    .order('created_at', { ascending: false }),
-                3000 // slightly longer for lists
-            );
-            return data || [];
-        } catch {
-            return [];
-        }
+    if (!isSupabaseConfigured()) return [];
+
+    try {
+        const { data } = await supabase
+            .from('transactions')
+            .select(`*, profiles:seeker_id(full_name, avatar_url, rating)`)
+            .eq('status', 'waiting-supporter')
+            .order('created_at', { ascending: false });
+        return data || [];
+    } catch {
+        return [];
     }
-    return []; 
   },
 
   acceptTransaction: async (txId: string, supporterId: string, percentage: number) => {
@@ -423,7 +379,7 @@ export const DBService = {
         if (error) throw error;
         return data;
     }
-    return { id: txId, seeker_id: 'seeker-uuid', amount: 0, listing_title: '', created_at: '', support_percentage: percentage, status: 'waiting-cash-payment' };
+    throw new Error("İşlem kabul edilemedi");
   },
 
   markCashPaid: async (txId: string) => {
@@ -487,21 +443,19 @@ export const DBService = {
               const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
               const filePath = `${fileName}`;
 
-              const { error: uploadError } = await withTimeout(
-                  supabase.storage.from('qr-codes').upload(filePath, file),
-                  8000
-              ) as any;
+              const { error: uploadError } = await supabase.storage.from('qr-codes').upload(filePath, file);
 
               if (uploadError) throw uploadError;
 
               const { data: { publicUrl } } = supabase.storage.from('qr-codes').getPublicUrl(filePath);
               return publicUrl;
           } catch (error) {
-              console.warn("Supabase Storage error, fallback to Base64");
-              return await fileToBase64(file);
+              console.warn("Supabase Storage error (QR):", error);
+              // If storage fails, we try base64 as last resort but user prefers Supabase
+              throw error; 
           }
       }
-      return await fileToBase64(file); 
+      throw new Error("Storage not configured");
   },
 
   // --- Profile Updates ---
@@ -517,36 +471,45 @@ export const DBService = {
     ReferralService.saveUserProfile({ ...current, ...data });
   },
 
-  uploadAvatar: async (file: File) => { return await fileToBase64(file); },
+  uploadAvatar: async (file: File) => { 
+    if (isSupabaseConfigured()) {
+          try {
+              const fileExt = file.name.split('.').pop();
+              const fileName = `avatars/${Math.random().toString(36).substring(2)}.${fileExt}`;
+              
+              const { error } = await supabase.storage.from('images').upload(fileName, file);
+              
+              if (error) throw error;
+              
+              const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+              return data.publicUrl;
+          } catch (e) {
+              console.warn("Resim yükleme hatası (Supabase):", e);
+              throw e;
+          }
+      }
+      throw new Error("Veritabanı bağlı değil");
+  },
 
-  // --- Messaging (REAL IMPLEMENTATION) ---
+  // --- Messaging (PURE SUPABASE) ---
   
   // Fetches list of conversations
   getInbox: async (): Promise<{id: string, name: string, avatar: string, lastMsg: string, time: Date, unread: number}[]> => { 
-    if (!isSupabaseConfigured()) {
-        // Return mock inbox if offline
-        return [
-            { id: 'user-2', name: 'Mert Demir', avatar: 'https://picsum.photos/100?random=2', lastMsg: 'Tamamdır, takas için uygunum.', time: new Date(), unread: 1 }
-        ];
-    }
+    if (!isSupabaseConfigured()) return [];
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
 
     try {
-        // Fetch all messages where I am sender or receiver with timeout
-        const { data: messages, error } = await withTimeout(
-            supabase
-                .from('messages')
-                .select(`
-                    *,
-                    sender:sender_id(full_name, avatar_url),
-                    receiver:receiver_id(full_name, avatar_url)
-                `)
-                .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-                .order('created_at', { ascending: false }),
-            2000
-        );
+        const { data: messages, error } = await supabase
+            .from('messages')
+            .select(`
+                *,
+                sender:sender_id(full_name, avatar_url),
+                receiver:receiver_id(full_name, avatar_url)
+            `)
+            .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+            .order('created_at', { ascending: false });
 
         if (error) throw error;
         if (!messages) return [];
@@ -558,6 +521,7 @@ export const DBService = {
             const otherId = isMeSender ? msg.receiver_id : msg.sender_id;
             const otherProfile = isMeSender ? msg.receiver : msg.sender;
 
+            // Only add if not exists, since we ordered by created_at desc, first one is latest
             if (!conversations.has(otherId)) {
                 conversations.set(otherId, {
                     id: otherId,
@@ -578,15 +542,13 @@ export const DBService = {
 
         return Array.from(conversations.values());
     } catch (e) {
-        console.warn("Inbox fetch slow or failed", e);
+        console.error("Inbox fetch failed", e);
         return [];
     }
   },
 
   getChatHistory: async (otherUserId: string, lastTime?: number): Promise<Message[]> => { 
-    if (!isSupabaseConfigured()) {
-        return MOCK_MESSAGES;
-    }
+    if (!isSupabaseConfigured()) return [];
     
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
@@ -602,7 +564,7 @@ export const DBService = {
             query = query.gt('created_at', new Date(lastTime).toISOString());
         }
 
-        const { data, error } = await withTimeout(query, 2000);
+        const { data, error } = await query;
         if (error) return [];
 
         return data.map((msg: any) => ({
@@ -633,18 +595,7 @@ export const DBService = {
   },
 
   sendMessage: async (receiverId: string, content: string): Promise<Message> => {
-    if (!isSupabaseConfigured()) {
-        const fakeMsg = {
-            id: `local-${Date.now()}`,
-            senderId: 'current-user',
-            receiverId: receiverId,
-            content: content,
-            createdAt: Date.now(),
-            isRead: false
-        };
-        MOCK_MESSAGES.push(fakeMsg);
-        return fakeMsg;
-    }
+    if (!isSupabaseConfigured()) throw new Error("Offline");
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Not logged in");
@@ -681,23 +632,18 @@ export const DBService = {
   },
 
   getChannelMessages: async (channelId: string): Promise<ChannelMessage[]> => {
-    if (!isSupabaseConfigured()) return [
-        { id: '1', channelId: 'general', senderId: 'user-2', senderName: 'Mert', senderAvatar: 'https://picsum.photos/100?random=2', content: 'Selamlar herkese!', createdAt: new Date().toISOString() }
-    ];
+    if (!isSupabaseConfigured()) return [];
     
     try {
-        const { data, error } = await withTimeout(
-            supabase
-                .from('channel_messages')
-                .select(`
-                    *,
-                    sender:sender_id(full_name, avatar_url)
-                `)
-                .eq('channel_id', channelId)
-                .order('created_at', { ascending: true })
-                .limit(100),
-            2000
-        );
+        const { data, error } = await supabase
+            .from('channel_messages')
+            .select(`
+                *,
+                sender:sender_id(full_name, avatar_url)
+            `)
+            .eq('channel_id', channelId)
+            .order('created_at', { ascending: true })
+            .limit(100);
 
         if (error) throw error;
 
@@ -716,10 +662,8 @@ export const DBService = {
   },
 
   sendChannelMessage: async (channelId: string, content: string) => {
-      if (!isSupabaseConfigured()) {
-          console.log("Offline channel message sent");
-          return {};
-      }
+      if (!isSupabaseConfigured()) throw new Error("Offline");
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Login required");
 
@@ -736,125 +680,73 @@ export const DBService = {
 
 // --- Swap Service ---
 
-// HYBRID IMPLEMENTATION - Mock Fallback enabled for reliability
-const MOCK_LISTINGS: SwapListing[] = [
-  {
-    id: '1',
-    title: 'Sony WH-1000XM4 Kulaklık',
-    description: 'Çok az kullanıldı, kutusu duruyor. Yemek kartı bakiyesi ile takas olur.',
-    requiredBalance: 5000,
-    photoUrl: 'https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=500&q=80',
-    location: 'Kadıköy',
-    ownerId: 'user-2',
-    ownerName: 'Mert Demir',
-    ownerAvatar: 'https://picsum.photos/100?random=2',
-    createdAt: new Date().toISOString()
-  },
-  {
-     id: '2',
-     title: 'Zara Hediye Çeki',
-     description: '2000 TL değerinde hediye çeki. 1500 TL yemek kartına verilir.',
-     requiredBalance: 1500,
-     photoUrl: 'https://images.unsplash.com/photo-1556742046-63b11574043b?w=500&q=80',
-     location: 'Beşiktaş',
-     ownerId: 'user-3',
-     ownerName: 'Ayşe Yılmaz',
-     ownerAvatar: 'https://picsum.photos/100?random=3',
-     createdAt: new Date().toISOString()
-  }
-];
-
+// STRICT SUPABASE IMPLEMENTATION
 export const SwapService = {
 
   getListings: async (): Promise<SwapListing[]> => {
-    // If Supabase is configured, try to fetch real data with FAST TIMEOUT
-    if (isSupabaseConfigured()) {
-        try {
-            const { data, error } = await withTimeout(
-                supabase
-                    .from('swap_listings')
-                    .select('*')
-                    .order('created_at', { ascending: false }),
-                2000 // 2 seconds strict timeout before fallback
-            );
-
-            if (!error && data && data.length > 0) {
-                return data.map((item: any) => ({
-                    id: item.id,
-                    title: item.title,
-                    description: item.description,
-                    requiredBalance: item.required_balance,
-                    photoUrl: item.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
-                    location: item.location || 'İstanbul',
-                    ownerId: item.owner_id,
-                    ownerName: item.owner_name || 'Kullanıcı',
-                    ownerAvatar: item.owner_avatar || 'https://picsum.photos/200',
-                    createdAt: item.created_at
-                }));
-            }
-        } catch (e) {
-            console.warn("Supabase fetch slow/failed, falling back to mock");
-        }
-    }
+    if (!isSupabaseConfigured()) return [];
     
-    // Fallback to Mock Data if offline or empty or slow
-    return MOCK_LISTINGS;
+    try {
+        const { data, error } = await supabase
+            .from('swap_listings')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error("Listings fetch error", error);
+            return [];
+        }
+
+        return data.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            requiredBalance: item.required_balance,
+            photoUrl: item.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
+            location: item.location || 'İstanbul',
+            ownerId: item.owner_id,
+            ownerName: item.owner_name || 'Kullanıcı',
+            ownerAvatar: item.owner_avatar || 'https://picsum.photos/200',
+            createdAt: item.created_at
+        }));
+    } catch (e) {
+        console.error("Swap Service Error", e);
+        return [];
+    }
   },
 
   getListingById: async (id: string): Promise<SwapListing | null> => {
-     let realData: SwapListing | null = null;
+     if (!isSupabaseConfigured()) return null;
 
-     if (isSupabaseConfigured()) {
-         try {
-             const { data, error } = await withTimeout(
-                 supabase
-                     .from('swap_listings')
-                     .select('*')
-                     .eq('id', id)
-                     .single(),
-                 2000
-             );
-             
-             if (data && !error) {
-                 realData = {
-                    id: data.id,
-                    title: data.title,
-                    description: data.description,
-                    requiredBalance: data.required_balance,
-                    photoUrl: data.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
-                    location: data.location || 'İstanbul',
-                    ownerId: data.owner_id,
-                    ownerName: data.owner_name || 'Kullanıcı',
-                    ownerAvatar: data.owner_avatar || 'https://picsum.photos/200',
-                    createdAt: data.created_at
-                 };
-             }
-         } catch (e) {
-             console.error(e);
+     try {
+         const { data, error } = await supabase
+             .from('swap_listings')
+             .select('*')
+             .eq('id', id)
+             .single();
+         
+         if (data && !error) {
+             return {
+                id: data.id,
+                title: data.title,
+                description: data.description,
+                requiredBalance: data.required_balance,
+                photoUrl: data.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
+                location: data.location || 'İstanbul',
+                ownerId: data.owner_id,
+                ownerName: data.owner_name || 'Kullanıcı',
+                ownerAvatar: data.owner_avatar || 'https://picsum.photos/200',
+                createdAt: data.created_at
+             };
          }
+     } catch (e) {
+         console.error(e);
      }
-
-     if (realData) return realData;
-     return MOCK_LISTINGS.find(l => l.id === id) || null;
+     return null;
   },
 
   createListing: async (title: string, description: string, price: number, photoUrl: string) => {
-    if (!isSupabaseConfigured()) {
-        const newMock = {
-            id: `local-${Date.now()}`,
-            title,
-            description,
-            requiredBalance: price,
-            photoUrl,
-            location: 'İstanbul',
-            ownerId: 'current-user',
-            ownerName: 'Ben',
-            ownerAvatar: 'https://picsum.photos/200',
-            createdAt: new Date().toISOString()
-        };
-        MOCK_LISTINGS.unshift(newMock);
-        return;
-    }
+    if (!isSupabaseConfigured()) throw new Error("Veritabanı bağlantısı yok");
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Oturum açmanız gerekiyor.");
@@ -886,8 +778,6 @@ export const SwapService = {
       if (isSupabaseConfigured()) {
           await supabase.from('swap_listings').delete().eq('id', id);
       }
-      const idx = MOCK_LISTINGS.findIndex(l => l.id === id);
-      if (idx !== -1) MOCK_LISTINGS.splice(idx, 1);
   },
 
   uploadImage: async (file: File): Promise<string> => {
@@ -896,19 +786,17 @@ export const SwapService = {
               const fileExt = file.name.split('.').pop();
               const fileName = `swap/${Math.random().toString(36).substring(2)}.${fileExt}`;
               
-              const { error } = await withTimeout(
-                  supabase.storage.from('images').upload(fileName, file), 
-                  8000
-              ) as any;
+              const { error } = await supabase.storage.from('images').upload(fileName, file);
               
               if (error) throw error;
               
               const { data } = supabase.storage.from('images').getPublicUrl(fileName);
               return data.publicUrl;
           } catch (e) {
-              console.warn("Resim yükleme hatası (Supabase), base64 deneniyor:", e);
+              console.warn("Resim yükleme hatası:", e);
+              throw e;
           }
       }
-      return await fileToBase64(file);
+      throw new Error("Veritabanı bağlantısı yok");
   }
 };
