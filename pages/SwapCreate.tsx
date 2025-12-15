@@ -51,14 +51,6 @@ export const SwapCreate: React.FC = () => {
     }
 
     setIsLoading(true);
-    
-    // Fallback timer to force navigation if Supabase hangs
-    const forceNavTimer = setTimeout(() => {
-        if(isLoading) {
-             console.warn("Force navigating due to save timeout");
-             navigate('/swap');
-        }
-    }, 8000);
 
     try {
         if (isSupabaseConfigured()) {
@@ -81,7 +73,6 @@ export const SwapCreate: React.FC = () => {
         // Create the listing with the photo URL (real or fallback)
         await SwapService.createListing(title, desc, parseInt(price), finalPhoto);
         
-        clearTimeout(forceNavTimer);
         // Success
         navigate('/swap');
     } catch (error: any) {

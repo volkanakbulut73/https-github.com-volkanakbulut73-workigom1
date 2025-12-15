@@ -680,17 +680,13 @@ export const SwapService = {
 
     if (isSupabaseConfigured()) {
         try {
-            // Updated: Removed withTimeout to avoid masking real DB errors.
-            // If the table 'swap_listings' exists, this should fetch.
-            // If RLS is enabled and no policy, it returns empty array [] (not error).
             const { data, error } = await supabase
                 .from('swap_listings')
                 .select('*')
                 .order('created_at', { ascending: false });
 
             if (error) {
-                console.error("Supabase fetch error:", error); // Log raw object for better debugging
-                // Return mocks only on error, so app isn't blank
+                console.error("Supabase fetch error:", error); 
                 return mocks; 
             }
 
@@ -708,8 +704,7 @@ export const SwapService = {
                     createdAt: item.created_at // string from timestamptz
                 }));
             }
-            
-            return mocks;
+            return []; // Empty DB returns empty list
         } catch (e) {
             console.error("Swap service exception:", e);
             return mocks;
@@ -768,9 +763,8 @@ export const SwapService = {
              userAvatar = profile.avatar_url;
          }
 
-         // Wrap in timeout so it doesn't hang indefinitely
-         const { error } = await withTimeout(
-             supabase.from('swap_listings').insert({
+         // Direct Supabase call (No custom timeout wrapper)
+         const { error } = await supabase.from('swap_listings').insert({
                  owner_id: user.id,
                  title,
                  description,
@@ -779,8 +773,7 @@ export const SwapService = {
                  owner_name: userName, // Added
                  owner_avatar: userAvatar, // Added
                  location: 'İstanbul' // Default location if not asked
-             })
-         ) as any;
+         });
          
          if (error) {
              console.error("Insert listing error:", error);
