@@ -1,9 +1,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, MapPin, MessageCircle, Wallet, Trash2, Loader2, User as UserIcon } from 'lucide-react';
+import { ChevronLeft, MapPin, Wallet, Trash2, Loader2, MessageCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '../components/Button';
 import { SwapService, SwapListing, ReferralService } from '../types';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 export const SwapDetail: React.FC = () => {
   const navigate = useNavigate();
@@ -18,11 +19,29 @@ export const SwapDetail: React.FC = () => {
         setLoading(true);
         const item = await SwapService.getListingById(id);
         if (item) setListing(item);
-        else navigate('/swap');
+        else if (!isSupabaseConfigured()) {
+            // Do nothing, UI handles non-configured state
+        } else {
+            // Item not found but configured
+            navigate('/swap'); 
+        }
         setLoading(false);
     };
     loadListing();
   }, [id, navigate]);
+
+  if (!isSupabaseConfigured()) {
+      return (
+         <div className="min-h-screen flex flex-col items-center justify-center bg-white p-6 text-center">
+             <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4">
+                 <AlertTriangle size={32} className="text-red-500" />
+             </div>
+             <h2 className="text-lg font-bold text-gray-800 mb-2">Veritabanı Bağlantısı Yok</h2>
+             <p className="text-gray-500 text-sm mb-6">Bu özelliği kullanabilmek için Supabase bağlantısının yapılması gerekmektedir.</p>
+             <Button onClick={() => navigate('/app')}>Ana Sayfaya Dön</Button>
+         </div>
+      );
+  }
 
   if (loading) {
      return (
@@ -43,9 +62,7 @@ export const SwapDetail: React.FC = () => {
     }
   };
 
-  // BU FONKSİYON SİZİ DİREKT ÖZEL MESAJ KUTUSUNA YÖNLENDİRİR
-  const handlePrivateMessage = () => {
-     // /messages rotası types.ts'deki DBService.getInbox ve sendMessage ile çalışır (Birebir Sohbet)
+  const handleContact = () => {
      navigate(`/messages/${listing.ownerId}`);
   };
 
@@ -88,41 +105,26 @@ export const SwapDetail: React.FC = () => {
                 </div>
                 <div className="text-right shrink-0">
                     <span className="block text-2xl md:text-4xl font-black text-slate-900">{listing.requiredBalance} ₺</span>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Yemek Kartı</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Fiyat</span>
                 </div>
             </div>
 
-            {/* İLAN SAHİBİ VE MESAJ BUTONU */}
-            <div className="flex items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                <div className="flex items-center gap-3">
-                    <div className="relative">
-                        <img 
-                            src={listing.ownerAvatar || 'https://picsum.photos/100'} 
-                            alt={listing.ownerName} 
-                            className="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover" 
-                        />
-                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
-                    </div>
-                    <div>
-                        <p className="text-sm font-bold text-slate-800">{listing.ownerName}</p>
-                        <p className="text-xs text-gray-500 font-medium">İlan Sahibi</p>
-                    </div>
+            {/* İlan Sahibi */}
+            <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                <img 
+                    src={listing.ownerAvatar || 'https://picsum.photos/100'} 
+                    alt={listing.ownerName} 
+                    className="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover" 
+                />
+                <div className="flex-1">
+                    <p className="text-sm font-bold text-slate-800">{listing.ownerName}</p>
+                    <p className="text-xs text-gray-500 font-medium">İlan Sahibi</p>
                 </div>
-
-                {!isOwner && (
-                    <button 
-                        onClick={handlePrivateMessage}
-                        className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl shadow-sm border border-gray-200 text-slate-900 font-bold text-xs hover:bg-slate-900 hover:text-white transition-all active:scale-95"
-                    >
-                        <MessageCircle size={18} />
-                        <span>Mesaj At</span>
-                    </button>
-                )}
             </div>
 
             {/* Açıklama */}
             <div className="space-y-2 pb-24 md:pb-0 md:flex-1">
-                <h3 className="font-bold text-slate-800 uppercase text-xs tracking-wider">İlan Detayı</h3>
+                <h3 className="font-bold text-slate-800 uppercase text-xs tracking-wider">Açıklama</h3>
                 <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap break-words bg-gray-50/50 p-4 rounded-xl border border-gray-50">
                     {listing.description || 'Açıklama belirtilmemiş.'}
                 </p>
@@ -133,7 +135,7 @@ export const SwapDetail: React.FC = () => {
                 {isOwner ? (
                     <Button fullWidth variant="secondary" disabled className="py-4 text-gray-400">Kendi İlanın</Button>
                 ) : (
-                    <Button fullWidth onClick={handlePrivateMessage} className="py-4 text-base shadow-xl shadow-slate-900/20">
+                    <Button fullWidth onClick={handleContact} className="py-4 text-base shadow-xl shadow-slate-900/20">
                         <Wallet className="mr-2" size={20} /> Takas Teklif Et
                     </Button>
                 )}

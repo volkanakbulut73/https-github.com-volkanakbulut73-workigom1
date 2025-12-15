@@ -665,11 +665,12 @@ export const DBService = {
 
 // --- Swap Service ---
 
+// STRICT SUPABASE IMPLEMENTATION - NO MOCK DATA
 export const SwapService = {
 
   getListings: async (): Promise<SwapListing[]> => {
     if (!isSupabaseConfigured()) {
-        console.warn("Veritabanı bağlantısı yok. İlanlar görüntülenemiyor.");
+        console.warn("Veritabanı bağlantısı yok. İlanlar yüklenemedi.");
         return [];
     }
 
@@ -703,7 +704,9 @@ export const SwapService = {
   },
 
   getListingById: async (id: string): Promise<SwapListing | null> => {
-     if (!isSupabaseConfigured()) return null;
+     if (!isSupabaseConfigured()) {
+        return null;
+     }
 
      try {
          const { data, error } = await supabase
@@ -734,7 +737,7 @@ export const SwapService = {
 
   createListing: async (title: string, description: string, price: number, photoUrl: string) => {
     if (!isSupabaseConfigured()) {
-        throw new Error("Veritabanı bağlantısı bulunamadı.");
+        throw new Error("Veritabanı bağlantısı bulunamadı. İlan oluşturulamaz.");
     }
 
     const { data: { user } } = await supabase.auth.getUser();
