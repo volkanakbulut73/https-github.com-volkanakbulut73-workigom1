@@ -1,9 +1,9 @@
+
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Lock, Mail, User as UserIcon, ArrowRight, Loader2, UserCheck } from 'lucide-react';
+import { Lock, Mail, User as UserIcon, ArrowRight, Loader2 } from 'lucide-react';
 import { Button } from '../components/Button';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { ReferralService, User } from '../types';
+import { supabase } from '../lib/supabase';
 
 export const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -14,38 +14,10 @@ export const Register: React.FC = () => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const performMockRegister = async () => {
-       await new Promise(r => setTimeout(r, 1000));
-       const mockUser: User = {
-          id: 'mock-user-demo-new',
-          name: name || 'Yeni Demo Kullanıcı',
-          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-          rating: 5.0,
-          location: 'İstanbul',
-          goldenHearts: 0,
-          silverHearts: 0,
-          isAvailable: true,
-          referralCode: 'NEWUSER1',
-          wallet: {
-            balance: 0,
-            totalEarnings: 0,
-            pendingBalance: 0
-          }
-       };
-       ReferralService.saveUserProfile(mockUser);
-       navigate('/app');
-  };
-
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-
-    if (!isSupabaseConfigured()) {
-       await performMockRegister();
-       setIsLoading(false);
-       return;
-    }
 
     try {
       const { data, error: authError } = await supabase.auth.signUp({
@@ -61,7 +33,7 @@ export const Register: React.FC = () => {
       if (authError) throw authError;
 
       if (data.user) {
-        alert("Kayıt başarılı! Lütfen e-postanızı kontrol edip hesabınızı doğrulayın, ardından giriş yapın.");
+        alert("Kayıt başarılı! Giriş yapabilirsiniz.");
         navigate('/login');
       }
     } catch (err: any) {
@@ -75,12 +47,6 @@ export const Register: React.FC = () => {
   const handleGoogleRegister = async () => {
     setIsGoogleLoading(true);
     setError(null);
-
-    if (!isSupabaseConfigured()) {
-        await performMockRegister();
-        setIsGoogleLoading(false);
-        return;
-    }
 
     try {
         const { error } = await supabase.auth.signInWithOAuth({
@@ -186,14 +152,6 @@ export const Register: React.FC = () => {
         </form>
 
         <div className="grid gap-3 mt-4">
-            <button 
-                type="button"
-                onClick={performMockRegister}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold py-3.5 rounded-xl hover:bg-emerald-100 transition-all active:scale-[0.98] text-sm"
-            >
-                <UserCheck size={18} /> Demo Kayıt (Hızlı)
-            </button>
-
             <button 
                 type="button"
                 onClick={handleGoogleRegister}
