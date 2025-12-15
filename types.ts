@@ -1,5 +1,4 @@
 
-
 // ... existing imports
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
@@ -234,13 +233,12 @@ export const TransactionService = {
 
 export const DBService = {
   getUserProfile: async (id: string): Promise<User | null> => {
-    if (!isSupabaseConfigured()) return null;
-
+    // Demo verileri engellemek için doğrudan sorgu yapıyoruz
     try {
         const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
         
         if (error) { 
-            console.warn("Profile fetch error:", error);
+            console.error("Profile fetch error (Supabase):", error);
             return null;
         }
         
@@ -256,23 +254,21 @@ export const DBService = {
                 isAvailable: true,
                 referralCode: data.referral_code || 'REF',
                 wallet: {
-                balance: data.wallet_balance || 0,
-                totalEarnings: data.total_earnings || 0,
-                pendingBalance: 0
+                  balance: data.wallet_balance || 0,
+                  totalEarnings: data.total_earnings || 0,
+                  pendingBalance: 0
                 }
             };
         }
     } catch (e) {
-        console.error(e);
+        console.error("Critical Profile Error:", e);
     }
     return null;
   },
 
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
-    if (!isSupabaseConfigured()) return null;
-
     try {
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('transactions')
             .select(`*, seeker:seeker_id(full_name), supporter:supporter_id(full_name)`)
             .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
@@ -281,6 +277,10 @@ export const DBService = {
             .order('created_at', { ascending: false })
             .limit(1)
             .single();
+
+        if (error && error.code !== 'PGRST116') { // PGRST116: no rows found
+             console.error("Get Active Tx Error:", error);
+        }
 
         if (data) {
             return {
@@ -307,8 +307,6 @@ export const DBService = {
   },
 
   createTransactionRequest: async (userId: string, amount: number, description: string) => {
-     if (!isSupabaseConfigured()) throw new Error("Veritabanı bağlantısı yok");
-
      const { data, error } = await supabase
         .from('transactions')
         .insert({
@@ -326,22 +324,23 @@ export const DBService = {
   },
 
   getPendingTransactions: async (): Promise<any[]> => { 
-    if (!isSupabaseConfigured()) return [];
-
     try {
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('transactions')
             .select(`*, profiles:seeker_id(full_name, avatar_url, rating)`)
             .eq('status', 'waiting-supporter')
             .order('created_at', { ascending: false });
+        
+        if (error) throw error;
         return data || [];
-    } catch {
+    } catch (e) {
+        console.error("Pending transactions error:", e);
         return [];
     }
   },
 
   acceptTransaction: async (txId: string, supporterId: string, percentage: number) => {
-    if (isSupabaseConfigured() && isUUID(txId)) {
+    if (isUUID(txId)) {
         const { data, error } = await supabase
             .from('transactions')
             .update({
@@ -355,122 +354,102 @@ export const DBService = {
         if (error) throw error;
         return data;
     }
-    throw new Error("İşlem kabul edilemedi");
+    throw new Error("Geçersiz işlem ID");
   },
 
   markCashPaid: async (txId: string) => {
-      if (isSupabaseConfigured() && isUUID(txId)) {
-          const { error } = await supabase.from('transactions').update({ status: 'cash-paid' }).eq('id', txId);
-          if (error) throw error;
-      }
+      const { error } = await supabase.from('transactions').update({ status: 'cash-paid' }).eq('id', txId);
+      if (error) throw error;
   },
 
   submitQR: async (txId: string, url: string) => {
-      if (isSupabaseConfigured() && isUUID(txId)) {
-          const { error } = await supabase.from('transactions')
-              .update({ status: 'qr-uploaded', qr_url: url, qr_uploaded_at: new Date().toISOString() }).eq('id', txId);
-          if (error) throw error;
-      }
+      const { error } = await supabase.from('transactions')
+          .update({ status: 'qr-uploaded', qr_url: url, qr_uploaded_at: new Date().toISOString() }).eq('id', txId);
+      if (error) throw error;
   },
 
   completeTransaction: async (txId: string) => {
-      if (isSupabaseConfigured() && isUUID(txId)) {
-          const { error } = await supabase.from('transactions')
-              .update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', txId);
-          if (error) throw error;
-      }
+      const { error } = await supabase.from('transactions')
+          .update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', txId);
+      if (error) throw error;
   },
 
   failTransaction: async (txId: string) => {
-      if (isSupabaseConfigured() && isUUID(txId)) {
-          const { error } = await supabase.from('transactions').update({ status: 'failed' }).eq('id', txId);
-          if (error) throw error;
-      }
+      const { error } = await supabase.from('transactions').update({ status: 'failed' }).eq('id', txId);
+      if (error) throw error;
   },
 
   cancelTransaction: async (txId: string) => {
-      if (isSupabaseConfigured() && isUUID(txId)) {
-          const { error } = await supabase.from('transactions').delete().eq('id', txId);
-          if (error) throw error;
-      }
+      const { error } = await supabase.from('transactions').delete().eq('id', txId);
+      if (error) throw error;
   },
 
   withdrawSupport: async (txId: string) => {
-      if (isSupabaseConfigured() && isUUID(txId)) {
-          const { error } = await supabase.from('transactions')
-              .update({ status: 'waiting-supporter', supporter_id: null, support_percentage: 20 }).eq('id', txId);
-          if (error) throw error;
-      }
+      const { error } = await supabase.from('transactions')
+          .update({ status: 'waiting-supporter', supporter_id: null, support_percentage: 20 }).eq('id', txId);
+      if (error) throw error;
   },
 
   dismissTransaction: async (txId: string) => {
-      if (isSupabaseConfigured() && isUUID(txId)) {
-          const { error } = await supabase.from('transactions').update({ status: 'dismissed' }).eq('id', txId);
-          if (error) throw error;
-      }
+      const { error } = await supabase.from('transactions').update({ status: 'dismissed' }).eq('id', txId);
+      if (error) throw error;
       TransactionService.clearActive();
   },
 
   // --- Storage ---
   uploadQR: async (file: File): Promise<string> => { 
-      if (isSupabaseConfigured()) {
-          try {
-              const fileExt = file.name.split('.').pop();
-              const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-              const filePath = `${fileName}`;
+      try {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+          const filePath = `${fileName}`;
 
-              const { error: uploadError } = await supabase.storage.from('qr-codes').upload(filePath, file);
+          const { error: uploadError } = await supabase.storage.from('qr-codes').upload(filePath, file);
 
-              if (uploadError) throw uploadError;
+          if (uploadError) throw uploadError;
 
-              const { data: { publicUrl } } = supabase.storage.from('qr-codes').getPublicUrl(filePath);
-              return publicUrl;
-          } catch (error) {
-              console.warn("Supabase Storage error (QR):", error);
-              throw error; 
-          }
+          const { data: { publicUrl } } = supabase.storage.from('qr-codes').getPublicUrl(filePath);
+          return publicUrl;
+      } catch (error) {
+          console.error("Supabase Storage error (QR):", error);
+          throw error; 
       }
-      throw new Error("Storage not configured");
   },
 
   // --- Profile Updates ---
   updateUserProfile: async (id: string, data: Partial<User>) => {
-    if (isSupabaseConfigured()) {
-        const updates: any = {};
-        if (data.name) updates.full_name = data.name;
-        if (data.location) updates.location = data.location;
-        if (data.avatar) updates.avatar_url = data.avatar;
-        await supabase.from('profiles').update(updates).eq('id', id);
-    }
+    const updates: any = {};
+    if (data.name) updates.full_name = data.name;
+    if (data.location) updates.location = data.location;
+    if (data.avatar) updates.avatar_url = data.avatar;
+    
+    const { error } = await supabase.from('profiles').update(updates).eq('id', id);
+    if (error) throw error;
+    
+    // Update local cache
     const current = ReferralService.getUserProfile();
     ReferralService.saveUserProfile({ ...current, ...data });
   },
 
   uploadAvatar: async (file: File) => { 
-    if (isSupabaseConfigured()) {
-          try {
-              const fileExt = file.name.split('.').pop();
-              const fileName = `avatars/${Math.random().toString(36).substring(2)}.${fileExt}`;
-              
-              const { error } = await supabase.storage.from('images').upload(fileName, file);
-              
-              if (error) throw error;
-              
-              const { data } = supabase.storage.from('images').getPublicUrl(fileName);
-              return data.publicUrl;
-          } catch (e) {
-              console.warn("Resim yükleme hatası (Supabase):", e);
-              throw e;
-          }
+      try {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `avatars/${Math.random().toString(36).substring(2)}.${fileExt}`;
+          
+          const { error } = await supabase.storage.from('images').upload(fileName, file);
+          
+          if (error) throw error;
+          
+          const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+          return data.publicUrl;
+      } catch (e) {
+          console.error("Resim yükleme hatası (Supabase):", e);
+          throw e;
       }
-      throw new Error("Veritabanı bağlı değil");
   },
 
   // --- Chat & Messages ---
 
   getInbox: async (): Promise<{ id: string; name: string; avatar: string; lastMsg: string; time: Date; unread: number; }[]> => {
-    if (!isSupabaseConfigured()) return [];
-    
     // Check if authenticated
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return [];
@@ -523,7 +502,6 @@ export const DBService = {
   },
 
   getChatHistory: async (userId: string, lastTime?: number): Promise<Message[]> => {
-      if (!isSupabaseConfigured()) return [];
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
 
@@ -551,7 +529,6 @@ export const DBService = {
   },
 
   sendMessage: async (receiverId: string, content: string): Promise<Message> => {
-      if (!isSupabaseConfigured()) throw new Error("Offline");
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not logged in");
 
@@ -574,7 +551,6 @@ export const DBService = {
   },
 
   markAsRead: async (senderId: string) => {
-      if (!isSupabaseConfigured()) return;
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
@@ -586,7 +562,6 @@ export const DBService = {
   },
 
   getChannels: async (): Promise<ChatChannel[]> => {
-      if (!isSupabaseConfigured()) return [];
       const { data, error } = await supabase.from('channels').select('*');
       if (error) return [];
       
@@ -599,8 +574,6 @@ export const DBService = {
   },
 
   getChannelMessages: async (channelId: string): Promise<ChannelMessage[]> => {
-      if (!isSupabaseConfigured()) return [];
-      
       const { data, error } = await supabase
         .from('channel_messages')
         .select(`*, profiles:sender_id(full_name, avatar_url)`)
@@ -622,7 +595,6 @@ export const DBService = {
   },
 
   sendChannelMessage: async (channelId: string, content: string) => {
-      if (!isSupabaseConfigured()) return;
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
@@ -638,8 +610,7 @@ export const DBService = {
 
 export const SwapService = {
   getListings: async (): Promise<SwapListing[]> => {
-    if (!isSupabaseConfigured()) return [];
-    
+    // Demo veriyi engelledik. Hata varsa loglar.
     try {
         const { data, error } = await supabase
             .from('swap_listings')
@@ -647,9 +618,12 @@ export const SwapService = {
             .order('created_at', { ascending: false });
 
         if (error) {
-            console.error("Listings fetch error", error);
+            console.error("Listings fetch error (Supabase):", error);
+            // Hata olsa bile boş dizi dönüyoruz ki uygulama çökmesin ama veri gelmez.
             return [];
         }
+        
+        if (!data) return [];
 
         return data.map((item: any) => ({
             id: item.id,
@@ -664,14 +638,12 @@ export const SwapService = {
             createdAt: item.created_at
         }));
     } catch (e) {
-        console.error("Swap Service Error", e);
+        console.error("Swap Service Critical Error:", e);
         return [];
     }
   },
 
   getListingById: async (id: string): Promise<SwapListing | null> => {
-     if (!isSupabaseConfigured()) return null;
-
      try {
          const { data, error } = await supabase
              .from('swap_listings')
@@ -679,7 +651,12 @@ export const SwapService = {
              .eq('id', id)
              .single();
          
-         if (data && !error) {
+         if (error) {
+             console.error("Swap item detail error:", error);
+             return null;
+         }
+
+         if (data) {
              return {
                 id: data.id,
                 title: data.title,
@@ -700,8 +677,6 @@ export const SwapService = {
   },
 
   createListing: async (title: string, description: string, price: number, photoUrl: string) => {
-    if (!isSupabaseConfigured()) throw new Error("Veritabanı bağlantısı yok");
-
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Oturum açmanız gerekiyor.");
 
@@ -725,32 +700,31 @@ export const SwapService = {
         location: 'İstanbul'
     });
     
-    if (error) throw error;
+    if (error) {
+        console.error("Create Listing Error:", error);
+        throw error;
+    }
   },
 
   deleteListing: async (id: string) => {
-      if (isSupabaseConfigured()) {
-          await supabase.from('swap_listings').delete().eq('id', id);
-      }
+      const { error } = await supabase.from('swap_listings').delete().eq('id', id);
+      if (error) throw error;
   },
 
   uploadImage: async (file: File): Promise<string> => {
-      if (isSupabaseConfigured()) {
-          try {
-              const fileExt = file.name.split('.').pop();
-              const fileName = `swap/${Math.random().toString(36).substring(2)}.${fileExt}`;
-              
-              const { error } = await supabase.storage.from('images').upload(fileName, file);
-              
-              if (error) throw error;
-              
-              const { data } = supabase.storage.from('images').getPublicUrl(fileName);
-              return data.publicUrl;
-          } catch (e) {
-              console.warn("Resim yükleme hatası:", e);
-              throw e;
-          }
+      try {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `swap/${Math.random().toString(36).substring(2)}.${fileExt}`;
+          
+          const { error } = await supabase.storage.from('images').upload(fileName, file);
+          
+          if (error) throw error;
+          
+          const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+          return data.publicUrl;
+      } catch (e) {
+          console.error("Resim yükleme hatası:", e);
+          throw e;
       }
-      throw new Error("Veritabanı bağlantısı yok");
   }
 };

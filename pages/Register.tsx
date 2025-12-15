@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Lock, Mail, User as UserIcon, ArrowRight, Loader2 } from 'lucide-react';
 import { Button } from '../components/Button';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -18,6 +18,12 @@ export const Register: React.FC = () => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    
+    if (!isSupabaseConfigured()) {
+       setError("Veritabanı yapılandırması eksik.");
+       setIsLoading(false);
+       return;
+    }
 
     try {
       const { data, error: authError } = await supabase.auth.signUp({
@@ -33,11 +39,11 @@ export const Register: React.FC = () => {
       if (authError) throw authError;
 
       if (data.user) {
-        alert("Kayıt başarılı! Giriş yapabilirsiniz.");
+        alert("Kayıt başarılı! Lütfen e-postanızı kontrol ederek hesabınızı doğrulayın, ardından giriş yapın.");
         navigate('/login');
       }
     } catch (err: any) {
-      console.error(err);
+      console.error("Register Error:", err);
       setError(err.message || "Kayıt sırasında bir hata oluştu.");
     } finally {
       setIsLoading(false);
@@ -45,6 +51,11 @@ export const Register: React.FC = () => {
   };
 
   const handleGoogleRegister = async () => {
+    if (!isSupabaseConfigured()) {
+       setError("Veritabanı yapılandırması eksik.");
+       return;
+    }
+
     setIsGoogleLoading(true);
     setError(null);
 
@@ -81,7 +92,7 @@ export const Register: React.FC = () => {
         </div>
 
         {error && (
-          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 text-center font-bold">
+          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 text-center font-bold border border-red-100">
             {error}
           </div>
         )}

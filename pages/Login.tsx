@@ -19,11 +19,10 @@ export const Login: React.FC = () => {
     setIsLoading(true);
     setError(null);
 
-    // Eğer Supabase yapılandırılmamışsa veya bağlantı yoksa otomatik Demo giriş yap
+    // Supabase kontrolü
     if (!isSupabaseConfigured()) {
-       setTimeout(() => {
-           handleDemoLogin();
-       }, 1000);
+       setError("Veritabanı yapılandırması eksik. Lütfen .env dosyasını kontrol edin.");
+       setIsLoading(false);
        return;
     }
 
@@ -36,7 +35,7 @@ export const Login: React.FC = () => {
       if (authError) throw authError;
 
       if (authData.user) {
-        // Fetch profile
+        // Profil bilgisini çek
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
@@ -64,41 +63,21 @@ export const Login: React.FC = () => {
         navigate('/app');
       }
     } catch (err: any) {
-      console.error(err);
-      // Supabase hatası olsa bile geliştirme ortamında devam etmeye izin ver
-      if (err.message.includes('fetch') || err.message.includes('connection')) {
-          handleDemoLogin();
-      } else {
-          setError(err.message || "Giriş başarısız. Bilgilerinizi kontrol edin.");
-          setIsLoading(false);
-      }
+      console.error("Login Error:", err);
+      // Hata mesajını kullanıcıya göster
+      let errorMessage = "Giriş başarısız. Bilgilerinizi kontrol edin.";
+      if (err.message === "Invalid login credentials") errorMessage = "E-posta veya şifre hatalı.";
+      if (err.message.includes("Email not confirmed")) errorMessage = "E-posta adresinizi doğrulamanız gerekiyor.";
+      
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
-  };
-
-  const handleDemoLogin = () => {
-      const demoUser: User = {
-          id: 'current-user',
-          name: 'Demo Kullanıcı',
-          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-          rating: 5.0,
-          location: 'İstanbul',
-          goldenHearts: 5,
-          silverHearts: 2,
-          isAvailable: true,
-          referralCode: 'DEMO123',
-          wallet: {
-              balance: 1500,
-              totalEarnings: 250,
-              pendingBalance: 0
-          }
-      };
-      ReferralService.saveUserProfile(demoUser);
-      navigate('/app');
   };
 
   const handleGoogleLogin = async () => {
     if (!isSupabaseConfigured()) {
-        handleDemoLogin();
+        setError("Veritabanı yapılandırması eksik.");
         return;
     }
     
@@ -118,7 +97,7 @@ export const Login: React.FC = () => {
         });
         if (error) throw error;
     } catch (err: any) {
-        console.error(err);
+        console.error("Google Login Error:", err);
         setError(err.message || "Google girişi başlatılamadı.");
         setIsGoogleLoading(false);
     }
@@ -138,7 +117,7 @@ export const Login: React.FC = () => {
         </div>
 
         {error && (
-          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 text-center font-bold">
+          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 text-center font-bold border border-red-100">
             {error}
           </div>
         )}
@@ -225,7 +204,7 @@ export const Login: React.FC = () => {
         {!isSupabaseConfigured() && (
              <div className="mt-4 p-3 bg-amber-50 rounded-xl text-center text-amber-700 text-xs flex items-center justify-center gap-2">
                  <AlertTriangle size={14} />
-                 <span>Veritabanı bağlı değil, Demo Modu aktif.</span>
+                 <span>Supabase yapılandırılmamış.</span>
              </div>
         )}
       </div>
