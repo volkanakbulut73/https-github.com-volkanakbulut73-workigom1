@@ -1,6 +1,7 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, MapPin, MessageCircle, Wallet, Trash2, Loader2 } from 'lucide-react';
+import { ChevronLeft, MoreVertical, MapPin, MessageCircle, Wallet, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { SwapService, SwapListing, ReferralService } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -46,9 +47,10 @@ export const SwapDetail: React.FC = () => {
   const handleMessage = async () => {
     if (isSupabaseConfigured()) {
         const { data: { user } } = await supabase.auth.getUser();
-        
         if (!user) {
-            navigate('/login');
+            if(window.confirm("Mesaj göndermek için giriş yapmalısınız. Giriş sayfasına gitmek ister misiniz?")) {
+                navigate('/login');
+            }
             return;
         }
     }
@@ -56,74 +58,86 @@ export const SwapDetail: React.FC = () => {
   };
 
   return (
-    <div className="pb-24 min-h-screen bg-white">
-      <div className="relative h-72 bg-gray-900 overflow-hidden w-full">
-        <img 
-            src={listing.photoUrl} 
-            alt={listing.title} 
-            className="absolute inset-0 w-full h-full object-contain" 
-        />
+    <div className="pb-24 min-h-screen bg-white md:bg-gray-50 md:py-10">
+      
+      {/* DESKTOP CONTAINER */}
+      <div className="md:max-w-5xl md:mx-auto md:bg-white md:rounded-[2rem] md:shadow-xl md:border border-gray-100 md:overflow-hidden md:grid md:grid-cols-2">
         
-        <div className="absolute top-0 left-0 w-full p-6 pt-8 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent z-10">
-            <button onClick={() => navigate(-1)} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30">
-                <ChevronLeft size={20} />
-            </button>
-            {isOwner && (
-                <button onClick={handleDelete} className="p-2 bg-red-500/80 backdrop-blur-md rounded-full text-white hover:bg-red-600">
-                    <Trash2 size={18} />
+        {/* Left Column (Desktop) / Top Section (Mobile): Image */}
+        <div className="relative h-72 md:h-full bg-gray-900 overflow-hidden w-full md:border-r border-gray-100">
+            <img 
+                src={listing.photoUrl} 
+                alt={listing.title} 
+                className="absolute inset-0 w-full h-full object-contain md:object-cover" 
+            />
+            
+            {/* Nav Buttons (Absolute for Mobile/Desktop Overlay) */}
+            <div className="absolute top-0 left-0 w-full p-6 pt-8 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent z-10">
+                <button onClick={() => navigate(-1)} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition-colors">
+                    <ChevronLeft size={20} />
                 </button>
-            )}
+                {isOwner && (
+                    <button onClick={handleDelete} className="p-2 bg-red-500/80 backdrop-blur-md rounded-full text-white hover:bg-red-600 transition-colors">
+                        <Trash2 size={18} />
+                    </button>
+                )}
+            </div>
         </div>
-      </div>
 
-      <div className="-mt-6 relative bg-white rounded-t-[2rem] px-6 pt-8 space-y-6 z-20 shadow-[-10px_0_20px_rgba(0,0,0,0.1)]">
-         
-         <div className="flex justify-between items-start">
-            <div className="flex-1 pr-4">
-                <h1 className="text-2xl font-bold text-gray-800 leading-tight mb-2 break-words">{listing.title}</h1>
-                <div className="flex items-center text-sm text-gray-500 gap-1">
-                    <MapPin size={14} className="text-primary" /> {listing.location}
+        {/* Right Column (Desktop) / Bottom Sheet (Mobile): Content */}
+        <div className="-mt-6 relative bg-white rounded-t-[2rem] px-6 pt-8 space-y-6 z-20 shadow-[-10px_0_20px_rgba(0,0,0,0.1)] md:mt-0 md:rounded-none md:shadow-none md:p-10 md:flex md:flex-col">
+            
+            {/* Title & Price */}
+            <div className="flex justify-between items-start border-b border-gray-50 pb-6">
+                <div className="flex-1 pr-4">
+                    <h1 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight mb-2 break-words">{listing.title}</h1>
+                    <div className="flex items-center text-sm text-gray-500 gap-1 font-medium">
+                        <MapPin size={16} className="text-emerald-500" /> {listing.location}
+                    </div>
+                </div>
+                <div className="text-right shrink-0">
+                    <span className="block text-2xl md:text-4xl font-black text-slate-900">{listing.requiredBalance} ₺</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Yemek Kartı</span>
                 </div>
             </div>
-            <div className="text-right shrink-0">
-                <span className="block text-2xl font-black text-slate-900">{listing.requiredBalance} ₺</span>
-                <span className="text-[10px] font-bold text-gray-400 uppercase">Yemek Kartı</span>
+
+            {/* Owner Info */}
+            <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                <img src={listing.ownerAvatar} alt={listing.ownerName} className="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover" />
+                <div className="flex-1">
+                    <p className="text-sm font-bold text-slate-800">{listing.ownerName}</p>
+                    <p className="text-xs text-gray-500 font-medium">İlan Sahibi</p>
+                </div>
+                {!isOwner && (
+                    <button 
+                        onClick={handleMessage}
+                        className="bg-white p-2.5 rounded-full shadow-sm text-slate-900 border border-gray-100 hover:bg-slate-900 hover:text-white transition-colors"
+                    >
+                        <MessageCircle size={20} />
+                    </button>
+                )}
             </div>
-         </div>
 
-         <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-2xl">
-            <img src={listing.ownerAvatar} alt={listing.ownerName} className="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover" />
-            <div className="flex-1">
-                <p className="text-sm font-bold text-gray-800">{listing.ownerName}</p>
-                <p className="text-xs text-gray-500">İlan Sahibi</p>
+            {/* Description */}
+            <div className="space-y-2 pb-24 md:pb-0 md:flex-1">
+                <h3 className="font-bold text-slate-800 uppercase text-xs tracking-wider">Açıklama</h3>
+                <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap break-words">
+                    {listing.description || 'Açıklama belirtilmemiş.'}
+                </p>
             </div>
-            {!isOwner && (
-                <button 
-                    onClick={handleMessage}
-                    className="bg-white p-2 rounded-full shadow-sm text-slate-900 hover:bg-slate-900 hover:text-white transition-colors"
-                >
-                    <MessageCircle size={20} />
-                </button>
-            )}
-         </div>
 
-         <div className="space-y-2 pb-10">
-            <h3 className="font-bold text-gray-800">Açıklama</h3>
-            <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap break-words">
-                {listing.description || 'Açıklama belirtilmemiş.'}
-            </p>
-         </div>
-
-         <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 z-40 pb-safe">
-            {isOwner ? (
-                <Button fullWidth variant="secondary" disabled>Kendi İlanın</Button>
-            ) : (
-                <Button fullWidth onClick={handleMessage}>
-                    <Wallet className="mr-2" size={18} /> Takas Teklif Et
-                </Button>
-            )}
-         </div>
-
+            {/* Bottom Action (Fixed on Mobile, Static on Desktop) */}
+            <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 z-40 pb-safe md:static md:p-0 md:border-0">
+                {isOwner ? (
+                    <Button fullWidth variant="secondary" disabled className="py-4 text-gray-400">Kendi İlanın</Button>
+                ) : (
+                    <Button fullWidth onClick={handleMessage} className="py-4 text-base shadow-xl shadow-slate-900/20">
+                        <Wallet className="mr-2" size={20} /> Takas Teklif Et
+                    </Button>
+                )}
+            </div>
+        </div>
+        
       </div>
     </div>
   );

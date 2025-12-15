@@ -33,7 +33,6 @@ export const SwapList: React.FC = () => {
 
   useEffect(() => { 
       loadListings();
-      // Listen for local storage updates (when user creates an item)
       const handleStorage = () => loadListings();
       window.addEventListener('storage', handleStorage);
       return () => window.removeEventListener('storage', handleStorage);
@@ -43,18 +42,16 @@ export const SwapList: React.FC = () => {
       e.stopPropagation();
       if (window.confirm('Bu ilanı silmek istediğinize emin misiniz?')) {
           await SwapService.deleteListing(id);
-          loadListings(); // Refresh list
+          loadListings();
       }
   };
 
-  // Helper to safely render strings
   const safeStr = (val: any): string => {
     if (typeof val === 'string') return val;
     if (typeof val === 'number') return String(val);
     return '';
   };
 
-  // Helper to safely render numbers
   const safeNum = (val: any): number => {
     const num = parseFloat(val);
     return isNaN(num) ? 0 : num;
@@ -62,22 +59,18 @@ export const SwapList: React.FC = () => {
 
   const filteredListings = listings.filter(l => {
     if (!l) return false;
-    
-    // Search Filter
     const title = safeStr(l.title).toLowerCase();
     const search = searchTerm.toLowerCase();
     const matchesSearch = title.includes(search);
-
-    // Tab Filter
     const matchesTab = activeTab === 'all' ? true : l.ownerId === currentUser.id;
-
     return matchesSearch && matchesTab;
   });
 
   return (
     <div className="pb-24 min-h-screen bg-gray-50 font-sans">
-      {/* HEADER & FILTERS */}
-      <div className="bg-slate-900 pt-10 pb-6 px-4 rounded-b-[2rem] md:rounded-3xl shadow-sm sticky top-0 z-30 md:mb-6">
+      
+      {/* HEADER & FILTERS - Masaüstünde ortalanmış ve yuvarlatılmış */}
+      <div className="bg-slate-900 pt-10 pb-6 px-4 rounded-b-[2rem] md:rounded-3xl shadow-sm sticky top-0 z-30 md:static md:mb-8 md:mt-4 md:mx-4 lg:mx-auto lg:max-w-6xl">
         
         {/* Top Bar: Back & Search */}
         <div className="flex items-center gap-3 mb-4 max-w-4xl mx-auto">
@@ -111,7 +104,7 @@ export const SwapList: React.FC = () => {
         </div>
 
         <div className="max-w-4xl mx-auto space-y-4">
-            {/* TABS (Market / My Listings) */}
+            {/* TABS */}
             <div className="bg-white/10 p-1 rounded-xl flex gap-1">
                 <button 
                     onClick={() => setActiveTab('all')} 
@@ -142,7 +135,7 @@ export const SwapList: React.FC = () => {
         </div>
       </div>
 
-      {/* FAB - Floating Action Button */}
+      {/* FAB - Masaüstünde sağ altta kalmaya devam edebilir veya yukarı taşınabilir. Şimdilik sağ altta bırakıyoruz ama hover efekti ekledik. */}
       <button 
         onClick={() => navigate('/swap/create')} 
         className="fixed bottom-24 right-5 md:bottom-10 md:right-10 bg-slate-900 text-white w-14 h-14 rounded-full shadow-xl shadow-slate-900/40 flex items-center justify-center z-40 active:scale-90 transition-transform hover:scale-105 border-4 border-white/10 group"
@@ -151,12 +144,12 @@ export const SwapList: React.FC = () => {
       </button>
 
       {/* CONTENT GRID */}
-      <div className="px-4 mt-4 relative z-20 max-w-4xl mx-auto">
+      <div className="px-4 mt-4 relative z-20 max-w-6xl mx-auto">
          <div className="flex justify-between items-center mb-4 px-1">
-            <h2 className="font-bold text-slate-800 text-sm md:text-base">
+            <h2 className="font-bold text-slate-800 text-sm md:text-xl">
                 {activeTab === 'all' ? 'Vitrin Ürünleri' : 'İlanlarım'}
             </h2>
-            <button onClick={loadListings} className="text-[10px] text-primary font-bold flex items-center gap-1 hover:bg-gray-100 px-2 py-1 rounded-md transition-colors">
+            <button onClick={loadListings} className="text-[10px] md:text-xs text-primary font-bold flex items-center gap-1 hover:bg-gray-100 px-2 py-1 rounded-md transition-colors">
                {loading && <Loader2 size={10} className="animate-spin"/>} Yenile
             </button>
          </div>
@@ -167,8 +160,8 @@ export const SwapList: React.FC = () => {
                <p className="text-xs">Yükleniyor...</p>
             </div>
          ) : filteredListings.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100">
-               <p className="text-gray-400 text-xs font-medium">
+            <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100 max-w-lg mx-auto">
+               <p className="text-gray-400 text-sm font-medium">
                    {activeTab === 'all' 
                     ? 'Aradığınız kriterlere uygun ilan bulunamadı.' 
                     : 'Henüz hiç ilan oluşturmadınız.'}
@@ -181,8 +174,8 @@ export const SwapList: React.FC = () => {
                )}
             </div>
          ) : (
-            // RESPONSIVE GRID: 2 cols on mobile, 3 on md, 4 on lg
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 pb-4">
+            // RESPONSIVE GRID: Mobile: 2 cols, MD: 3 cols, LG: 4 cols
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 pb-4">
                {filteredListings.map((item, index) => {
                   if (!item) return null;
                   const itemId = safeStr(item.id) || `fallback-${index}`;
@@ -192,14 +185,13 @@ export const SwapList: React.FC = () => {
                   const itemOwnerAvatar = safeStr(item.ownerAvatar);
                   const itemPrice = safeNum(item.requiredBalance);
                   
-                  // Check Ownership
                   const isOwner = item.ownerId === currentUser.id;
 
                   return (
                     <div 
                       key={itemId} 
                       onClick={() => navigate(`/swap/${itemId}`)} 
-                      className="bg-white rounded-2xl p-2.5 shadow-sm border border-gray-100 active:scale-[0.98] transition-all cursor-pointer hover:shadow-md group flex flex-col h-full"
+                      className="bg-white rounded-2xl p-2.5 shadow-sm border border-gray-100 active:scale-[0.98] transition-all cursor-pointer hover:shadow-md hover:border-gray-200 group flex flex-col h-full"
                     >
                        {/* Image */}
                        <div className="relative aspect-[3/4] bg-gray-50 rounded-xl overflow-hidden mb-3">
@@ -208,7 +200,6 @@ export const SwapList: React.FC = () => {
                             alt={itemTitle} 
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
                           />
-                          
                           <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
   
                           {isOwner ? (
@@ -235,7 +226,7 @@ export const SwapList: React.FC = () => {
                        {/* Details */}
                        <div className="px-1 space-y-1 flex-1 flex flex-col">
                           <div className="flex justify-between items-start gap-2">
-                             <h3 className="text-xs font-bold text-slate-800 line-clamp-2 leading-snug min-h-[2.5em]">
+                             <h3 className="text-xs md:text-sm font-bold text-slate-800 line-clamp-2 leading-snug min-h-[2.5em]">
                                 {itemTitle}
                              </h3>
                           </div>
@@ -249,7 +240,7 @@ export const SwapList: React.FC = () => {
   
                           <div className="flex items-center justify-between pt-1 border-t border-gray-50 mt-auto">
                              <div className="flex flex-col">
-                                <span className="text-sm font-black text-slate-900">{itemPrice} ₺</span>
+                                <span className="text-sm md:text-base font-black text-slate-900">{itemPrice} ₺</span>
                              </div>
                              {!isOwner && (
                                 <button className="w-7 h-7 bg-slate-900 rounded-full flex items-center justify-center text-white shadow-md shadow-slate-900/20 group-hover:scale-110 transition-transform">
