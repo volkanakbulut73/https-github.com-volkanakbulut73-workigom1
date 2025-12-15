@@ -479,7 +479,6 @@ export const DBService = {
   getChatHistory: async (userId: string, lastTime?: number) => { return []; },
   markAsRead: async (userId: string) => {},
   sendMessage: async (userId: string, content: string) => {
-    // Return dummy message to satisfy TS in orphaned files, but effectively disabled
     return {
       id: 'disabled',
       senderId: 'disabled',
@@ -490,7 +489,6 @@ export const DBService = {
     };
   },
   getChannels: async (): Promise<ChatChannel[]> => { 
-    // Mock channel list
     return [
       { id: 'general', name: '#Genel', description: 'Genel sohbet odası', usersOnline: 142 },
       { id: 'support', name: '#Yardım', description: 'Uygulama hakkında sorular', usersOnline: 5 },
@@ -504,209 +502,106 @@ export const DBService = {
 // --- Swap Service ---
 
 export const SwapService = {
-  // Helper for local storage Fallback
-  getLocalListings: (): SwapListing[] => {
-      try {
-          const stored = localStorage.getItem('local_swap_listings');
-          return stored ? JSON.parse(stored) : [];
-      } catch { return []; }
-  },
-  
-  saveLocalListing: (listing: SwapListing) => {
-      const current = SwapService.getLocalListings();
-      const filtered = current.filter(l => l.id !== listing.id);
-      localStorage.setItem('local_swap_listings', JSON.stringify([listing, ...filtered]));
-      window.dispatchEvent(new Event('storage'));
-  },
 
   getListings: async (): Promise<SwapListing[]> => {
-    const mocks: SwapListing[] = [
-      {
-        id: '1',
-        title: 'Sony WH-1000XM4 Kulaklık',
-        description: 'Az kullanılmış, kutulu faturalı. Yemek kartı ile takas olur.',
-        requiredBalance: 3500,
-        photoUrl: 'https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=500&auto=format&fit=crop&q=60',
-        location: 'Kadıköy, İstanbul',
-        ownerId: 'user-2',
-        ownerName: 'Zeynep K.',
-        ownerAvatar: 'https://picsum.photos/101/101',
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: '2',
-        title: 'Apple Magic Keyboard',
-        description: 'Türkçe Q Klavye, temiz durumda.',
-        requiredBalance: 2000,
-        photoUrl: 'https://images.unsplash.com/photo-1587829741301-dc798b91add1?w=500&auto=format&fit=crop&q=60',
-        location: 'Beşiktaş, İstanbul',
-        ownerId: 'user-3',
-        ownerName: 'Ahmet Y.',
-        ownerAvatar: 'https://picsum.photos/102/102',
-        createdAt: new Date().toISOString()
-      }
-    ];
+    if (!isSupabaseConfigured()) {
+        console.warn("Veritabanı bağlantısı yok. İlanlar görüntülenemiyor.");
+        return [];
+    }
 
-    // 1. Get Local Items
-    const local = SwapService.getLocalListings();
-    
-    let remote: SwapListing[] = [];
+    try {
+        const { data, error } = await supabase
+            .from('swap_listings')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-    // 2. Try Fetch DB with Timeout
-    if (isSupabaseConfigured()) {
-        try {
-            // Using withTimeout to prevent hanging loading screens
-            const { data, error } = await withTimeout(
-                supabase.from('swap_listings').select('*').order('created_at', { ascending: false }),
-                5000, // 5 seconds timeout
-                { data: null, error: { message: 'Timeout' } } as any
-            );
-
-            if (!error && data) {
-                remote = data.map((item: any) => ({
-                    id: item.id,
-                    title: item.title,
-                    description: item.description,
-                    requiredBalance: item.required_balance,
-                    photoUrl: item.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
-                    location: item.location || 'İstanbul',
-                    ownerId: item.owner_id,
-                    ownerName: item.owner_name || 'Kullanıcı',
-                    ownerAvatar: item.owner_avatar || 'https://picsum.photos/200',
-                    createdAt: item.created_at
-                }));
-            }
-        } catch (e) {
-            console.warn("DB Fetch Warning (using local/mocks):", e);
+        if (error) {
+            console.error("İlanlar çekilirken hata:", error);
+            return [];
         }
-    }
 
-    // 3. Merge Strategies
-    const combinedMap = new Map<string, SwapListing>();
-    local.forEach(item => combinedMap.set(item.id, item));
-    remote.forEach(item => combinedMap.set(item.id, item));
-    const combined = Array.from(combinedMap.values());
-    
-    if (combined.length === 0) {
-        return mocks;
+        return data.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            requiredBalance: item.required_balance,
+            photoUrl: item.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
+            location: item.location || 'İstanbul',
+            ownerId: item.owner_id,
+            ownerName: item.owner_name || 'Kullanıcı',
+            ownerAvatar: item.owner_avatar || 'https://picsum.photos/200',
+            createdAt: item.created_at
+        }));
+    } catch (e) {
+        console.error("Bilinmeyen hata:", e);
+        return [];
     }
-
-    combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return combined;
   },
 
   getListingById: async (id: string): Promise<SwapListing | null> => {
-     // Check local first
-     const local = SwapService.getLocalListings();
-     const foundLocal = local.find(l => l.id === id);
-     if (foundLocal) return foundLocal;
+     if (!isSupabaseConfigured()) return null;
 
-     if (isSupabaseConfigured() && !id.startsWith('local-')) {
-         try {
-             const { data } = await withTimeout(
-                 supabase.from('swap_listings').select('*').eq('id', id).single(),
-                 5000,
-                 { data: null } as any
-             );
-             
-             if (data) {
-                 return {
-                    id: data.id,
-                    title: data.title,
-                    description: data.description,
-                    requiredBalance: data.required_balance,
-                    photoUrl: data.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
-                    location: data.location || 'İstanbul',
-                    ownerId: data.owner_id,
-                    ownerName: data.owner_name || 'Kullanıcı',
-                    ownerAvatar: data.owner_avatar || 'https://picsum.photos/200',
-                    createdAt: data.created_at
-                 };
-             }
-         } catch (e) {
-             console.error(e);
-         }
+     try {
+         const { data, error } = await supabase
+             .from('swap_listings')
+             .select('*')
+             .eq('id', id)
+             .single();
+         
+         if (error || !data) return null;
+
+         return {
+            id: data.id,
+            title: data.title,
+            description: data.description,
+            requiredBalance: data.required_balance,
+            photoUrl: data.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
+            location: data.location || 'İstanbul',
+            ownerId: data.owner_id,
+            ownerName: data.owner_name || 'Kullanıcı',
+            ownerAvatar: data.owner_avatar || 'https://picsum.photos/200',
+            createdAt: data.created_at
+         };
+     } catch (e) {
+         console.error(e);
+         return null;
      }
-     
-     const all = await SwapService.getListings();
-     return all.find(l => l.id === id) || null;
   },
 
   createListing: async (title: string, description: string, price: number, photoUrl: string) => {
-    const user = ReferralService.getUserProfile();
-    let userName = user.name;
-    let userAvatar = user.avatar;
-    let finalListing: SwapListing | null = null;
-
-    if (isSupabaseConfigured()) {
-       try {
-           const { data: { user: authUser } } = await supabase.auth.getUser();
-           if (authUser) {
-             const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
-             if(profile) {
-                 userName = profile.full_name;
-                 userAvatar = profile.avatar_url;
-             }
-
-             // Wrapped in timeout
-             const { data, error } = await withTimeout(
-                 supabase.from('swap_listings').insert({
-                     owner_id: authUser.id,
-                     title,
-                     description,
-                     required_balance: price,
-                     photo_url: photoUrl,
-                     owner_name: userName,
-                     owner_avatar: userAvatar,
-                     location: 'İstanbul'
-                 }).select().single(),
-                 8000
-             ) as any;
-             
-             if (data && !error) {
-                 finalListing = {
-                    id: data.id,
-                    title: data.title,
-                    description: data.description,
-                    requiredBalance: data.required_balance,
-                    photoUrl: data.photo_url,
-                    location: data.location,
-                    ownerId: data.owner_id,
-                    ownerName: data.owner_name,
-                    ownerAvatar: data.owner_avatar,
-                    createdAt: data.created_at
-                 };
-             }
-           }
-       } catch (e) {
-           console.warn("DB Create Listing Error (using local)", e);
-       }
+    if (!isSupabaseConfigured()) {
+        throw new Error("Veritabanı bağlantısı bulunamadı.");
     }
 
-    if (!finalListing) {
-        finalListing = {
-            id: 'local-' + Date.now(),
-            title,
-            description,
-            requiredBalance: price,
-            photoUrl: photoUrl,
-            location: 'İstanbul',
-            ownerId: user.id,
-            ownerName: userName,
-            ownerAvatar: userAvatar,
-            createdAt: new Date().toISOString()
-        };
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Oturum açmanız gerekiyor.");
+
+    let userName = user.user_metadata.full_name || 'Kullanıcı';
+    let userAvatar = user.user_metadata.avatar_url || 'https://picsum.photos/200';
+
+    // Try fetching updated profile info
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    if(profile) {
+        userName = profile.full_name;
+        userAvatar = profile.avatar_url;
     }
 
-    SwapService.saveLocalListing(finalListing);
+    const { error } = await supabase.from('swap_listings').insert({
+        owner_id: user.id,
+        title,
+        description,
+        required_balance: price,
+        photo_url: photoUrl,
+        owner_name: userName,
+        owner_avatar: userAvatar,
+        location: 'İstanbul'
+    });
+    
+    if (error) throw error;
   },
 
   deleteListing: async (id: string) => {
-      const current = SwapService.getLocalListings().filter(l => l.id !== id);
-      localStorage.setItem('local_swap_listings', JSON.stringify(current));
-      window.dispatchEvent(new Event('storage'));
-
-      if (isSupabaseConfigured() && !id.startsWith('local-')) {
+      if (isSupabaseConfigured()) {
           await supabase.from('swap_listings').delete().eq('id', id);
       }
   },
@@ -727,10 +622,10 @@ export const SwapService = {
               const { data } = supabase.storage.from('images').getPublicUrl(fileName);
               return data.publicUrl;
           } catch (e) {
-              console.warn("Upload fallback to base64", e);
-              return await fileToBase64(file);
+              console.warn("Resim yükleme hatası:", e);
+              throw new Error("Resim yüklenemedi");
           }
       }
-      return await fileToBase64(file);
+      throw new Error("Veritabanı bağlantısı yok");
   }
 };

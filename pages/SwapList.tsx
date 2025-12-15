@@ -14,7 +14,6 @@ export const SwapList: React.FC = () => {
   const currentUser = ReferralService.getUserProfile();
 
   const loadListings = async () => {
-    // Logic from mobile code: set loading true at start
     setLoading(true);
     try {
       const data = await SwapService.getListings();
@@ -27,18 +26,12 @@ export const SwapList: React.FC = () => {
       console.error(e);
       setListings([]);
     } finally {
-      // Logic from mobile code: always turn off loading in finally
       setLoading(false);
     }
   };
 
-  // Logic from mobile code: simple useEffect
   useEffect(() => { 
       loadListings();
-      // Added listener to update UI when creating items locally
-      const handleStorage = () => loadListings();
-      window.addEventListener('storage', handleStorage);
-      return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
