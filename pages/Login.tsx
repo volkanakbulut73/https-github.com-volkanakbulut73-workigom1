@@ -35,6 +35,16 @@ export const Login: React.FC = () => {
       if (authError) throw authError;
 
       if (authData.user) {
+        // Profil verisini önceden çekip locale kaydet (Hızlı yükleme için)
+        try {
+             const profile = await DBService.getUserProfile(authData.user.id);
+             if (profile) {
+                 ReferralService.saveUserProfile(profile);
+             }
+        } catch (e) { 
+            console.warn("Profil ön yükleme hatası:", e); 
+        }
+
         // navigate('/app') yerine window.location.replace kullanıyoruz.
         // Bu, Google girişindeki gibi sayfayı tazeleyerek Supabase client'ın 
         // token'ı doğru şekilde almasını ve SwapList verilerinin yüklenmesini garantiler.

@@ -17,6 +17,8 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Invite } from './pages/Invite';
 import { Earnings } from './pages/Earnings';
+import { Messages } from './pages/Messages';
+import { ChatRooms } from './pages/ChatRooms';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { ReferralService, DBService, User } from './types'; 
 import { supabase, isSupabaseConfigured } from './lib/supabase';
@@ -28,48 +30,64 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
   useEffect(() => {
     let mounted = true;
+    
+    // Safety timeout: If auth check hangs for 10s, force stop loading.
+    const safetyTimer = setTimeout(() => {
+        if (mounted && isLoading) {
+            console.warn("Auth check timed out - forcing state.");
+            setIsLoading(false);
+            // If we have a local user, assume authenticated, otherwise kick out
+            const localUser = ReferralService.getUserProfile();
+            setIsAuthenticated(localUser.id !== 'current-user');
+        }
+    }, 10000);
 
     const initializeAuth = async () => {
-      // 1. Önce LocalStorage kontrolü
+      // 1. Optimistic Check: Local Storage
+      // If we are NOT in an OAuth redirect flow, trust local storage immediately to unblock UI
+      const isOAuthRedirect = window.location.hash && window.location.hash.includes('access_token');
       const localUser = ReferralService.getUserProfile();
-      if (localUser.id !== 'current-user') {
-          // Local storage var, Supabase bağlantısı kopuk olsa bile session varmış gibi davranabiliriz 
-          // ancak doğrusu Supabase session'ı beklemektir.
-          // Yine de hızlı yükleme için local'i kullanıp arka planda sync yapabiliriz.
+      
+      if (!isOAuthRedirect && localUser.id !== 'current-user') {
+          if (mounted) {
+              setIsAuthenticated(true);
+              setIsLoading(false);
+          }
       }
 
-      // 2. Supabase Oturum Kontrolü
+      // 2. Supabase Check
       if (isSupabaseConfigured()) {
-          const isOAuthRedirect = window.location.hash && window.location.hash.includes('access_token');
-          if (isOAuthRedirect) return;
-
           try {
-              // Oturum kontrolü
-              const { data: { session } } = await supabase.auth.getSession();
+              // getSession automatically handles OAuth tokens in URL hash
+              const { data: { session }, error } = await supabase.auth.getSession();
 
               if (session?.user) {
                  await handleUserSession(session.user);
               } else {
-                 if (mounted) { setIsAuthenticated(false); setIsLoading(false); }
+                 // If no session and NOT waiting for OAuth redirect to process
+                 if (!isOAuthRedirect) {
+                     if (mounted) { setIsAuthenticated(false); setIsLoading(false); }
+                 }
               }
           } catch (error) {
               console.warn("Auth check failed:", error);
               if (mounted) { setIsAuthenticated(false); setIsLoading(false); }
           }
       } else {
-          // Config yoksa login sayfasına at
+          // No config
           if (mounted) { setIsAuthenticated(false); setIsLoading(false); }
       }
     };
 
     const handleUserSession = async (user: any) => {
         try {
+            // Try to get updated profile from DB
             const profile = await DBService.getUserProfile(user.id);
             if (profile) {
                 ReferralService.saveUserProfile(profile);
                 if (mounted) setIsAuthenticated(true);
             } else {
-                // Profil veritabanında yoksa (örn: Google ile ilk giriş), oluşturalım.
+                // If profile missing in DB, create it
                 const newProfile: User = {
                     id: user.id,
                     name: user.user_metadata.full_name || user.email?.split('@')[0] || 'Yeni Kullanıcı',
@@ -82,27 +100,32 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     referralCode: 'REF' + Math.random().toString(36).substring(2, 8).toUpperCase(),
                     wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
                 };
-                
-                // Veritabanına kaydet
                 await DBService.upsertProfile(newProfile);
-                
-                // Locale kaydet
                 ReferralService.saveUserProfile(newProfile);
                 if (mounted) setIsAuthenticated(true);
             }
         } catch (e) {
             console.error("Profile load error", e);
-            if (mounted) setIsAuthenticated(false);
+            // Even if profile load fails, if we have a session, we might want to stay logged in
+            // but for safety, let's keep authentication true if we had a local user
+            if (mounted) setIsAuthenticated(true);
         } finally {
             if (mounted) setIsLoading(false);
+            clearTimeout(safetyTimer);
         }
     };
 
+    // Listen for auth state changes (Sign In, Sign Out, Token Refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
-            await handleUserSession(session.user);
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+            if (session?.user) {
+                await handleUserSession(session.user);
+            }
         } else if (event === 'SIGNED_OUT') {
-            if (mounted) setIsAuthenticated(false);
+            if (mounted) {
+                setIsAuthenticated(false);
+                setIsLoading(false);
+            }
         }
     });
 
@@ -110,6 +133,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
     return () => {
         mounted = false;
+        clearTimeout(safetyTimer);
         subscription.unsubscribe();
     };
   }, []);
@@ -162,6 +186,8 @@ const AppRoutes: React.FC = () => {
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/login" element={<AuthLayout><Login /></AuthLayout>} />
       <Route path="/register" element={<AuthLayout><Register /></AuthLayout>} />
+      
+      {/* Protected Routes */}
       <Route path="/app" element={<DashboardLayout><Home /></DashboardLayout>} />
       <Route path="/find-share" element={<DashboardLayout><FindShare /></DashboardLayout>} />
       <Route path="/supporters" element={<DashboardLayout><Supporters /></DashboardLayout>} />
@@ -170,8 +196,18 @@ const AppRoutes: React.FC = () => {
       <Route path="/swap" element={<DashboardLayout><SwapList /></DashboardLayout>} />
       <Route path="/swap/create" element={<DashboardLayout><SwapCreate /></DashboardLayout>} />
       <Route path="/swap/:id" element={<DashboardLayout><SwapDetail /></DashboardLayout>} />
+      
       <Route path="/invite" element={<DashboardLayout><Invite /></DashboardLayout>} />
       <Route path="/earnings" element={<DashboardLayout><Earnings /></DashboardLayout>} />
+      
+      {/* Messaging */}
+      <Route path="/messages" element={<DashboardLayout><Messages /></DashboardLayout>} />
+      <Route path="/messages/:userId" element={<DashboardLayout><Messages /></DashboardLayout>} />
+      
+      {/* Channels */}
+      <Route path="/chatrooms" element={<DashboardLayout><ChatRooms /></DashboardLayout>} />
+      <Route path="/chatrooms/:channelId" element={<DashboardLayout><ChatRooms /></DashboardLayout>} />
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
