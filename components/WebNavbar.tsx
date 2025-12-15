@@ -33,14 +33,7 @@ export const WebNavbar: React.FC<{ isLanding?: boolean }> = ({ isLanding = false
           )}
 
           <div className="flex items-center gap-3">
-            {isLoggedIn ? (
-              <button 
-                onClick={() => navigate('/app')}
-                className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-lg shadow-emerald-500/30 active:scale-95"
-              >
-                Uygulamaya Git
-              </button>
-            ) : (
+            {!isLoggedIn && (
               <>
                 <Link 
                   to="/login" 
