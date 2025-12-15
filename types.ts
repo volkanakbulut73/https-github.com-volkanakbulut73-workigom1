@@ -95,13 +95,13 @@ export interface SwapListing {
   createdAt: string; // Changed to string for consistency with DB timestamptz
 }
 
-// Simplified Message interface to prevent breakage in orphaned files (though unused)
+// Simplified Message interface
 export interface Message {
   id: string;
   senderId: string;
   receiverId: string;
   content: string;
-  createdAt: number;
+  createdAt: number; // We will convert DB timestamptz to timestamp number for easier sorting
   isRead: boolean;
 }
 
@@ -296,7 +296,16 @@ export const DBService = {
   },
 
   getUnreadCounts: async (id: string) => {
-    return { messages: 0, notifications: 0 };
+     if(!isSupabaseConfigured()) return { messages: 0, notifications: 0 };
+     
+     // Count unread messages
+     const { count } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('receiver_id', id)
+        .eq('is_read', false);
+
+     return { messages: count || 0, notifications: 0 };
   },
 
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
@@ -466,6 +475,8 @@ export const DBService = {
     if (isSupabaseConfigured()) {
         const updates: any = {};
         if (data.name) updates.full_name = data.name;
+        if (data.location) updates.location = data.location;
+        if (data.avatar) updates.avatar_url = data.avatar;
         await supabase.from('profiles').update(updates).eq('id', id);
     }
     const current = ReferralService.getUserProfile();
@@ -474,20 +485,131 @@ export const DBService = {
 
   uploadAvatar: async (file: File) => { return await fileToBase64(file); },
 
-  // --- Stubbed Messaging ---
-  getInbox: async () => { return []; },
-  getChatHistory: async (userId: string, lastTime?: number) => { return []; },
-  markAsRead: async (userId: string) => {},
-  sendMessage: async (userId: string, content: string) => {
+  // --- Messaging (REAL IMPLEMENTATION) ---
+  
+  // Fetches list of conversations
+  getInbox: async (): Promise<{id: string, name: string, avatar: string, lastMsg: string, time: Date, unread: number}[]> => { 
+    if (!isSupabaseConfigured()) return [];
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    // Fetch all messages where I am sender or receiver
+    const { data: messages, error } = await supabase
+        .from('messages')
+        .select(`
+            *,
+            sender:sender_id(full_name, avatar_url),
+            receiver:receiver_id(full_name, avatar_url)
+        `)
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Inbox error:", error);
+        return [];
+    }
+
+    const conversations = new Map();
+
+    messages.forEach((msg: any) => {
+        const isMeSender = msg.sender_id === user.id;
+        const otherId = isMeSender ? msg.receiver_id : msg.sender_id;
+        const otherProfile = isMeSender ? msg.receiver : msg.sender;
+
+        if (!conversations.has(otherId)) {
+            conversations.set(otherId, {
+                id: otherId,
+                name: formatName(otherProfile?.full_name || 'Kullanıcı'),
+                avatar: otherProfile?.avatar_url || 'https://picsum.photos/100',
+                lastMsg: msg.content,
+                time: new Date(msg.created_at),
+                unread: 0
+            });
+        }
+
+        // Count unread if I am the receiver and message is not read
+        if (!isMeSender && !msg.is_read) {
+            const conv = conversations.get(otherId);
+            conv.unread += 1;
+        }
+    });
+
+    return Array.from(conversations.values());
+  },
+
+  getChatHistory: async (otherUserId: string, lastTime?: number): Promise<Message[]> => { 
+    if (!isSupabaseConfigured()) return [];
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    let query = supabase
+        .from('messages')
+        .select('*')
+        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user.id})`)
+        .order('created_at', { ascending: true });
+
+    if (lastTime) {
+        query = query.gt('created_at', new Date(lastTime).toISOString());
+    }
+
+    const { data, error } = await query;
+    if (error) return [];
+
+    return data.map((msg: any) => ({
+        id: msg.id,
+        senderId: msg.sender_id,
+        receiverId: msg.receiver_id,
+        content: msg.content,
+        createdAt: new Date(msg.created_at).getTime(),
+        isRead: msg.is_read
+    }));
+  },
+
+  markAsRead: async (otherUserId: string) => {
+      if (isSupabaseConfigured()) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+
+          await supabase
+            .from('messages')
+            .update({ is_read: true })
+            .eq('sender_id', otherUserId)
+            .eq('receiver_id', user.id)
+            .eq('is_read', false);
+      }
+  },
+
+  sendMessage: async (receiverId: string, content: string): Promise<Message> => {
+    if (!isSupabaseConfigured()) throw new Error("Offline");
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Not logged in");
+
+    const { data, error } = await supabase
+        .from('messages')
+        .insert({
+            sender_id: user.id,
+            receiver_id: receiverId,
+            content: content
+        })
+        .select()
+        .single();
+    
+    if (error) throw error;
+
     return {
-      id: 'disabled',
-      senderId: 'disabled',
-      receiverId: 'disabled',
-      content: '',
-      createdAt: Date.now(),
-      isRead: true
+        id: data.id,
+        senderId: data.sender_id,
+        receiverId: data.receiver_id,
+        content: data.content,
+        createdAt: new Date(data.created_at).getTime(),
+        isRead: false
     };
   },
+
+  // --- Channel / Room Messaging ---
   getChannels: async (): Promise<ChatChannel[]> => { 
     return [
       { id: 'general', name: '#Genel', description: 'Genel sohbet odası', usersOnline: 142 },
@@ -495,8 +617,50 @@ export const DBService = {
       { id: 'market', name: '#Pazar', description: 'Takas ilanları hakkında', usersOnline: 24 }
     ]; 
   },
-  getChannelMessages: async (channelId: string): Promise<ChannelMessage[]> => { return []; },
-  sendChannelMessage: async (channelId: string, content: string) => { return {}; }
+
+  getChannelMessages: async (channelId: string): Promise<ChannelMessage[]> => {
+    if (!isSupabaseConfigured()) return [];
+    
+    const { data, error } = await supabase
+        .from('channel_messages')
+        .select(`
+            *,
+            sender:sender_id(full_name, avatar_url)
+        `)
+        .eq('channel_id', channelId)
+        .order('created_at', { ascending: true })
+        .limit(100);
+
+    if (error) {
+        console.error("Channel msg error:", error);
+        return [];
+    }
+
+    return data.map((msg: any) => ({
+        id: msg.id,
+        channelId: msg.channel_id,
+        senderId: msg.sender_id,
+        senderName: formatName(msg.sender?.full_name),
+        senderAvatar: msg.sender?.avatar_url || 'https://picsum.photos/100',
+        content: msg.content,
+        createdAt: msg.created_at
+    }));
+  },
+
+  sendChannelMessage: async (channelId: string, content: string) => {
+      if (!isSupabaseConfigured()) throw new Error("Offline");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Login required");
+
+      const { error } = await supabase.from('channel_messages').insert({
+          channel_id: channelId,
+          sender_id: user.id,
+          content
+      });
+      
+      if (error) throw error;
+      return {};
+  }
 };
 
 // --- Swap Service ---

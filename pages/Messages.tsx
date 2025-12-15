@@ -100,7 +100,11 @@ export const Messages: React.FC = () => {
                    <p className="text-xs">Yükleniyor...</p>
                 </div>
              ) : filteredInbox.length === 0 ? (
-                null
+                <div className="flex flex-col items-center justify-center py-20 text-gray-300 px-6 text-center">
+                   <MessageSquareOff size={48} className="mb-3 opacity-20" />
+                   <p className="text-sm font-medium">Henüz mesajınız yok</p>
+                   <p className="text-xs mt-1">Takas ilanlarından teklif vererek sohbet başlatabilirsiniz.</p>
+                </div>
              ) : (
                 filteredInbox.map(chat => (
                    <div 
@@ -132,7 +136,12 @@ export const Messages: React.FC = () => {
       <div className={`flex-1 bg-gray-50 h-full ${!userId && !isDesktop ? 'hidden' : 'block'}`}>
          {userId ? (
             <ChatDetail overrideUserId={userId} isSplitView={isDesktop} />
-         ) : null}
+         ) : (
+            <div className="hidden md:flex flex-col items-center justify-center h-full text-gray-300">
+                <MessageSquareOff size={64} className="mb-4 opacity-10" />
+                <p className="text-sm font-medium">Bir sohbet seçin</p>
+            </div>
+         )}
       </div>
 
     </div>

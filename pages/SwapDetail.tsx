@@ -1,10 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, MoreVertical, MapPin, MessageCircle, Wallet, Trash2, Loader2 } from 'lucide-react';
+import { ChevronLeft, MapPin, MessageCircle, Wallet, Trash2, Loader2, User as UserIcon } from 'lucide-react';
 import { Button } from '../components/Button';
 import { SwapService, SwapListing, ReferralService } from '../types';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const SwapDetail: React.FC = () => {
   const navigate = useNavigate();
@@ -44,17 +43,19 @@ export const SwapDetail: React.FC = () => {
     }
   };
 
-  const handleMessage = async () => {
-     alert("Mesajlaşma özelliği şu an bakımda. Lütfen daha sonra tekrar deneyin.");
+  // BU FONKSİYON SİZİ DİREKT ÖZEL MESAJ KUTUSUNA YÖNLENDİRİR
+  const handlePrivateMessage = () => {
+     // /messages rotası types.ts'deki DBService.getInbox ve sendMessage ile çalışır (Birebir Sohbet)
+     navigate(`/messages/${listing.ownerId}`);
   };
 
   return (
     <div className="pb-24 min-h-screen bg-white md:bg-gray-50 md:py-10">
       
-      {/* DESKTOP CONTAINER */}
+      {/* Container */}
       <div className="md:max-w-5xl md:mx-auto md:bg-white md:rounded-[2rem] md:shadow-xl md:border border-gray-100 md:overflow-hidden md:grid md:grid-cols-2">
         
-        {/* Left Column (Desktop) / Top Section (Mobile): Image */}
+        {/* Sol Taraf (Resim) */}
         <div className="relative h-72 md:h-full bg-gray-900 overflow-hidden w-full md:border-r border-gray-100">
             <img 
                 src={listing.photoUrl} 
@@ -62,7 +63,6 @@ export const SwapDetail: React.FC = () => {
                 className="absolute inset-0 w-full h-full object-contain md:object-cover" 
             />
             
-            {/* Nav Buttons (Absolute for Mobile/Desktop Overlay) */}
             <div className="absolute top-0 left-0 w-full p-6 pt-8 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent z-10">
                 <button onClick={() => navigate(-1)} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition-colors">
                     <ChevronLeft size={20} />
@@ -75,10 +75,10 @@ export const SwapDetail: React.FC = () => {
             </div>
         </div>
 
-        {/* Right Column (Desktop) / Bottom Sheet (Mobile): Content */}
+        {/* Sağ Taraf (Bilgiler) */}
         <div className="-mt-6 relative bg-white rounded-t-[2rem] px-6 pt-8 space-y-6 z-20 shadow-[-10px_0_20px_rgba(0,0,0,0.1)] md:mt-0 md:rounded-none md:shadow-none md:p-10 md:flex md:flex-col">
             
-            {/* Title & Price */}
+            {/* Başlık ve Fiyat */}
             <div className="flex justify-between items-start border-b border-gray-50 pb-6">
                 <div className="flex-1 pr-4">
                     <h1 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight mb-2 break-words">{listing.title}</h1>
@@ -92,37 +92,48 @@ export const SwapDetail: React.FC = () => {
                 </div>
             </div>
 
-            {/* Owner Info */}
-            <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-100">
-                <img src={listing.ownerAvatar} alt={listing.ownerName} className="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover" />
-                <div className="flex-1">
-                    <p className="text-sm font-bold text-slate-800">{listing.ownerName}</p>
-                    <p className="text-xs text-gray-500 font-medium">İlan Sahibi</p>
+            {/* İLAN SAHİBİ VE MESAJ BUTONU */}
+            <div className="flex items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <img 
+                            src={listing.ownerAvatar || 'https://picsum.photos/100'} 
+                            alt={listing.ownerName} 
+                            className="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover" 
+                        />
+                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold text-slate-800">{listing.ownerName}</p>
+                        <p className="text-xs text-gray-500 font-medium">İlan Sahibi</p>
+                    </div>
                 </div>
+
                 {!isOwner && (
                     <button 
-                        onClick={handleMessage}
-                        className="bg-white p-2.5 rounded-full shadow-sm text-slate-900 border border-gray-100 hover:bg-slate-900 hover:text-white transition-colors"
+                        onClick={handlePrivateMessage}
+                        className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl shadow-sm border border-gray-200 text-slate-900 font-bold text-xs hover:bg-slate-900 hover:text-white transition-all active:scale-95"
                     >
-                        <MessageCircle size={20} />
+                        <MessageCircle size={18} />
+                        <span>Mesaj At</span>
                     </button>
                 )}
             </div>
 
-            {/* Description */}
+            {/* Açıklama */}
             <div className="space-y-2 pb-24 md:pb-0 md:flex-1">
-                <h3 className="font-bold text-slate-800 uppercase text-xs tracking-wider">Açıklama</h3>
-                <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap break-words">
+                <h3 className="font-bold text-slate-800 uppercase text-xs tracking-wider">İlan Detayı</h3>
+                <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap break-words bg-gray-50/50 p-4 rounded-xl border border-gray-50">
                     {listing.description || 'Açıklama belirtilmemiş.'}
                 </p>
             </div>
 
-            {/* Bottom Action (Fixed on Mobile, Static on Desktop) */}
+            {/* Alt Aksiyon Butonu */}
             <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 z-40 pb-safe md:static md:p-0 md:border-0">
                 {isOwner ? (
                     <Button fullWidth variant="secondary" disabled className="py-4 text-gray-400">Kendi İlanın</Button>
                 ) : (
-                    <Button fullWidth onClick={handleMessage} className="py-4 text-base shadow-xl shadow-slate-900/20">
+                    <Button fullWidth onClick={handlePrivateMessage} className="py-4 text-base shadow-xl shadow-slate-900/20">
                         <Wallet className="mr-2" size={20} /> Takas Teklif Et
                     </Button>
                 )}
