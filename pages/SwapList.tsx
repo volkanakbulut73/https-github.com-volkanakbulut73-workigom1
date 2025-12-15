@@ -32,7 +32,7 @@ export const SwapList: React.FC = () => {
 
   useEffect(() => { 
       loadListings();
-  }, []);
+  }, [currentUser.id]); // Reload if user context changes
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
@@ -164,11 +164,14 @@ export const SwapList: React.FC = () => {
             <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100 max-w-lg mx-auto">
                <p className="text-gray-400 text-sm font-medium">
                    {activeTab === 'all' 
-                    ? 'Aradığınız kriterlere uygun ilan bulunamadı.' 
+                    ? 'Aradığınız kriterlere uygun ilan bulunamadı veya listelenemedi.' 
                     : 'Henüz hiç ilan oluşturmadınız.'}
                </p>
                {activeTab === 'all' && (
-                  <button onClick={() => setSearchTerm('')} className="mt-2 text-primary text-xs font-bold">Aramayı Temizle</button>
+                  <div className="flex flex-col gap-2 mt-4">
+                      <button onClick={() => setSearchTerm('')} className="text-primary text-xs font-bold">Aramayı Temizle</button>
+                      <button onClick={loadListings} className="text-emerald-500 text-xs font-bold bg-emerald-50 px-4 py-2 rounded-lg">Tekrar Dene</button>
+                  </div>
                )}
                {activeTab === 'my' && (
                   <button onClick={() => navigate('/swap/create')} className="mt-2 text-primary text-xs font-bold">İlk İlanını Oluştur</button>

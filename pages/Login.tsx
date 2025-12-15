@@ -35,7 +35,10 @@ export const Login: React.FC = () => {
       if (authError) throw authError;
 
       if (authData.user) {
-        navigate('/app');
+        // navigate('/app') yerine window.location.replace kullanıyoruz.
+        // Bu, Google girişindeki gibi sayfayı tazeleyerek Supabase client'ın 
+        // token'ı doğru şekilde almasını ve SwapList verilerinin yüklenmesini garantiler.
+        window.location.replace('/app');
       }
     } catch (err: any) {
       console.error("Login Error:", err);
@@ -45,7 +48,6 @@ export const Login: React.FC = () => {
       if (err.message.includes("Email not confirmed")) errorMessage = "E-posta adresinizi doğrulamanız gerekiyor.";
       
       setError(errorMessage);
-    } finally {
       setIsLoading(false);
     }
   };
