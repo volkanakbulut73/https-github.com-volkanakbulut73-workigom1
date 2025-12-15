@@ -18,9 +18,6 @@ import { Register } from './pages/Register';
 import { Invite } from './pages/Invite';
 import { Earnings } from './pages/Earnings';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
-import { Messages } from './pages/Messages';
-import { ChatDetail } from './pages/ChatDetail';
-import { ChatRooms } from './pages/ChatRooms';
 import { ReferralService, DBService, User } from './types'; 
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
@@ -167,12 +164,6 @@ const AppRoutes: React.FC = () => {
       <Route path="/find-share" element={<DashboardLayout><FindShare /></DashboardLayout>} />
       <Route path="/supporters" element={<DashboardLayout><Supporters /></DashboardLayout>} />
       <Route path="/profile" element={<DashboardLayout><Profile /></DashboardLayout>} />
-      
-      <Route path="/messages" element={<DashboardLayout><Messages /></DashboardLayout>} />
-      <Route path="/messages/:userId" element={<DashboardLayout><Messages /></DashboardLayout>} />
-      
-      <Route path="/chatrooms" element={<DashboardLayout><ChatRooms /></DashboardLayout>} />
-      <Route path="/chatrooms/:channelId" element={<DashboardLayout><ChatRooms /></DashboardLayout>} />
       
       <Route path="/swap" element={<DashboardLayout><SwapList /></DashboardLayout>} />
       <Route path="/swap/create" element={<DashboardLayout><SwapCreate /></DashboardLayout>} />

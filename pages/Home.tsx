@@ -9,7 +9,6 @@ export const Home: React.FC = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<User>(ReferralService.getUserProfile());
   const [greeting, setGreeting] = useState('');
-  const [unreadCounts, setUnreadCounts] = useState({ messages: 0, notifications: 0 });
 
   useEffect(() => {
     const fetchRealData = async () => {
@@ -23,8 +22,6 @@ export const Home: React.FC = () => {
               setUser(profile);
               ReferralService.saveUserProfile(profile);
            }
-           const counts = await DBService.getUnreadCounts(authUser.id);
-           setUnreadCounts(counts);
         }
       } catch (e) {
         console.log("Offline or demo mode", e);
@@ -67,9 +64,6 @@ export const Home: React.FC = () => {
 
          <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100 relative hover:bg-slate-50 transition-colors">
             <Bell size={18} className="text-slate-600" />
-            {unreadCounts.notifications > 0 && (
-               <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-            )}
          </button>
       </header>
 

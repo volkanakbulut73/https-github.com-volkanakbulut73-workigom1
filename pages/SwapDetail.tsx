@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, MapPin, Wallet, Trash2, Loader2, MessageCircle } from 'lucide-react';
+import { ChevronLeft, MapPin, Wallet, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { SwapService, SwapListing, ReferralService } from '../types';
 
@@ -16,7 +16,6 @@ export const SwapDetail: React.FC = () => {
     const loadListing = async () => {
         if (!id) return;
         setLoading(true);
-        // Servis artık otomatik olarak Mock veya Real data dönüyor
         const item = await SwapService.getListingById(id);
         if (item) setListing(item);
         else navigate('/swap');
@@ -42,10 +41,6 @@ export const SwapDetail: React.FC = () => {
         await SwapService.deleteListing(listing.id);
         navigate('/swap');
     }
-  };
-
-  const handleContact = () => {
-     navigate(`/messages/${listing.ownerId}`);
   };
 
   return (
@@ -104,16 +99,6 @@ export const SwapDetail: React.FC = () => {
                         <p className="text-xs text-gray-500 font-medium">İlan Sahibi</p>
                     </div>
                 </div>
-                
-                {!isOwner && (
-                    <button 
-                        onClick={handleContact}
-                        className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl shadow-sm border border-gray-200 text-slate-900 font-bold text-xs hover:bg-slate-900 hover:text-white transition-all active:scale-95"
-                    >
-                        <MessageCircle size={18} />
-                        <span>Mesaj At</span>
-                    </button>
-                )}
             </div>
 
             {/* Açıklama */}
@@ -129,7 +114,7 @@ export const SwapDetail: React.FC = () => {
                 {isOwner ? (
                     <Button fullWidth variant="secondary" disabled className="py-4 text-gray-400">Kendi İlanın</Button>
                 ) : (
-                    <Button fullWidth onClick={handleContact} className="py-4 text-base shadow-xl shadow-slate-900/20">
+                    <Button fullWidth onClick={() => alert("Yakında...")} className="py-4 text-base shadow-xl shadow-slate-900/20">
                         <Wallet className="mr-2" size={20} /> Takas Teklif Et
                     </Button>
                 )}

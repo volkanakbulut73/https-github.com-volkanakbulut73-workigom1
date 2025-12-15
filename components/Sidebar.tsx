@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Heart, ArrowLeftRight, User, LogOut, Plus, Wallet, MessageSquare, Hash, MessagesSquare } from 'lucide-react';
+import { Home, Heart, ArrowLeftRight, User, LogOut, Plus, Wallet } from 'lucide-react';
 import { ReferralService } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -55,12 +55,7 @@ export const Sidebar: React.FC = () => {
           <NavItem to="/swap" icon={ArrowLeftRight} label="Takas Pazarı" />
           
           <div className="my-4 border-t border-gray-100 mx-4"></div>
-          <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">İletişim</p>
           
-          <NavItem to="/messages" icon={MessageSquare} label="Mesajlar (Özel)" />
-          <NavItem to="/chatrooms" icon={Hash} label="Sohbet Odaları" />
-          
-          <div className="my-4 border-t border-gray-100 mx-4"></div>
           <NavItem to="/profile" icon={User} label="Profil" />
         </nav>
       </div>

@@ -1,8 +1,8 @@
 
+
 // ... existing imports
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
-// ... (previous interfaces remain the same until Services)
 export enum VoucherCompany {
   SODEXO = 'Sodexo',
   MULTINET = 'Multinet',
@@ -24,7 +24,6 @@ export interface Voucher {
   createdAt: string;
 }
 
-// Updated Enum to match Database Status Values exactly
 export enum TrackerStep {
   WAITING_SUPPORTER = 'waiting-supporter',
   WAITING_CASH_PAYMENT = 'waiting-cash-payment',
@@ -33,8 +32,7 @@ export enum TrackerStep {
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
   FAILED = 'failed',
-  DISMISSED = 'dismissed', // Added for archival
-  // UI helper states (not in DB)
+  DISMISSED = 'dismissed',
   SUPPORT_CONFIRMED = 'support-confirmed', 
   PAYMENT_CONFIRMED = 'payment-confirmed',
   WAITING_POS_CONFIRMATION = 'waiting-pos-confirmation'
@@ -57,21 +55,19 @@ export interface User {
   };
 }
 
-// Updated Transaction Interface for 'transactions' table
 export interface Transaction {
   id: string;
   seekerId: string;
-  supporterId?: string; // Nullable in DB
+  supporterId?: string;
   amount: number;
-  listingTitle: string; // listing_title in DB
+  listingTitle: string;
   status: TrackerStep;
   supportPercentage: 20 | 100;
   qrUrl?: string;
-  createdAt: string; // timestamptz
-  qrUploadedAt?: string; // timestamptz
-  completedAt?: string; // timestamptz
+  createdAt: string;
+  qrUploadedAt?: string;
+  completedAt?: string;
   
-  // Computed/Joined fields
   seekerName?: string;
   supporterName?: string;
   amounts: {
@@ -92,17 +88,7 @@ export interface SwapListing {
   ownerId: string;
   ownerName: string;
   ownerAvatar: string;
-  createdAt: string; // Changed to string for consistency with DB timestamptz
-}
-
-// Simplified Message interface
-export interface Message {
-  id: string;
-  senderId: string;
-  receiverId: string;
-  content: string;
-  createdAt: number; // We will convert DB timestamptz to timestamp number for easier sorting
-  isRead: boolean;
+  createdAt: string;
 }
 
 export interface RewardLog {
@@ -112,7 +98,15 @@ export interface RewardLog {
   createdAt: number;
 }
 
-// Added for ChatRooms
+export interface Message {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  content: string;
+  createdAt: number;
+  isRead: boolean;
+}
+
 export interface ChatChannel {
   id: string;
   name: string;
@@ -141,7 +135,6 @@ export const formatName = (fullName: string): string => {
 
 const isUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
-// Helper to convert File to Base64 (Prevents blob: URL errors)
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -161,14 +154,14 @@ export const calculateTransaction = (amount: number, percentage: 20 | 100) => {
     };
   }
   
-  const seekerPayment = amount * 0.8; // User pays 80% in cash
-  const supportAmount = amount; // Supporter pays full amount via QR
-  const platformFee = amount * 0.05; // 5% fee on total amount
-  const refundToSupporter = seekerPayment - platformFee; // Supporter gets seeker's payment minus fee
+  const seekerPayment = amount * 0.8;
+  const supportAmount = amount;
+  const platformFee = amount * 0.05;
+  const refundToSupporter = seekerPayment - platformFee;
 
   return {
     seekerPayment,
-    seekerSavings: amount - seekerPayment, // 20% savings
+    seekerSavings: amount - seekerPayment,
     supportAmount,
     refundToSupporter
   };
@@ -176,7 +169,6 @@ export const calculateTransaction = (amount: number, percentage: 20 | 100) => {
 
 // --- Services ---
 
-// Default empty user for initialization, NOT for display
 const DEFAULT_USER: User = {
   id: 'current-user',
   name: 'Kullanıcı',
@@ -213,7 +205,7 @@ export const ReferralService = {
     window.dispatchEvent(new Event('storage'));
   },
   processReward: (tx: Transaction) => {
-     // Backend should handle rewards in real app
+     // Backend rewards logic
   },
   getLogs: (): RewardLog[] => {
       return [];
@@ -221,7 +213,6 @@ export const ReferralService = {
 };
 
 export const TransactionService = {
-  // Local storage fallback mainly for UI state persistence across refresh
   getHistory: (): Transaction[] => {
     return [];
   },
@@ -275,21 +266,6 @@ export const DBService = {
         console.error(e);
     }
     return null;
-  },
-
-  getUnreadCounts: async (id: string) => {
-     if(!isSupabaseConfigured()) return { messages: 0, notifications: 0 };
-     
-     try {
-         const { count } = await supabase
-            .from('messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('receiver_id', id)
-            .eq('is_read', false);
-         return { messages: count || 0, notifications: 0 };
-     } catch {
-         return { messages: 0, notifications: 0 };
-     }
   },
 
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
@@ -451,7 +427,6 @@ export const DBService = {
               return publicUrl;
           } catch (error) {
               console.warn("Supabase Storage error (QR):", error);
-              // If storage fails, we try base64 as last resort but user prefers Supabase
               throw error; 
           }
       }
@@ -491,198 +466,177 @@ export const DBService = {
       throw new Error("Veritabanı bağlı değil");
   },
 
-  // --- Messaging (PURE SUPABASE) ---
-  
-  // Fetches list of conversations
-  getInbox: async (): Promise<{id: string, name: string, avatar: string, lastMsg: string, time: Date, unread: number}[]> => { 
-    if (!isSupabaseConfigured()) return [];
+  // --- Chat & Messages ---
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
-
-    try {
-        const { data: messages, error } = await supabase
-            .from('messages')
-            .select(`
-                *,
-                sender:sender_id(full_name, avatar_url),
-                receiver:receiver_id(full_name, avatar_url)
-            `)
-            .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        if (!messages) return [];
-
-        const conversations = new Map();
-
-        messages.forEach((msg: any) => {
-            const isMeSender = msg.sender_id === user.id;
-            const otherId = isMeSender ? msg.receiver_id : msg.sender_id;
-            const otherProfile = isMeSender ? msg.receiver : msg.sender;
-
-            // Only add if not exists, since we ordered by created_at desc, first one is latest
-            if (!conversations.has(otherId)) {
-                conversations.set(otherId, {
-                    id: otherId,
-                    name: formatName(otherProfile?.full_name || 'Kullanıcı'),
-                    avatar: otherProfile?.avatar_url || 'https://picsum.photos/100',
-                    lastMsg: msg.content,
-                    time: new Date(msg.created_at),
-                    unread: 0
-                });
-            }
-
-            // Count unread if I am the receiver and message is not read
-            if (!isMeSender && !msg.is_read) {
-                const conv = conversations.get(otherId);
-                conv.unread += 1;
-            }
-        });
-
-        return Array.from(conversations.values());
-    } catch (e) {
-        console.error("Inbox fetch failed", e);
-        return [];
-    }
-  },
-
-  getChatHistory: async (otherUserId: string, lastTime?: number): Promise<Message[]> => { 
+  getInbox: async (): Promise<{ id: string; name: string; avatar: string; lastMsg: string; time: Date; unread: number; }[]> => {
     if (!isSupabaseConfigured()) return [];
     
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+    // Check if authenticated
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return [];
+    const user = session.user;
 
     try {
-        let query = supabase
-            .from('messages')
-            .select('*')
-            .or(`and(sender_id.eq.${user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user.id})`)
-            .order('created_at', { ascending: true });
+       // Fetch messages where current user is sender or receiver
+       const { data, error } = await supabase
+        .from('messages')
+        .select(`
+            *,
+            sender:sender_id(id, full_name, avatar_url),
+            receiver:receiver_id(id, full_name, avatar_url)
+        `)
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .order('created_at', { ascending: false });
 
-        if (lastTime) {
-            query = query.gt('created_at', new Date(lastTime).toISOString());
-        }
+       if (error) throw error;
+       if (!data) return [];
 
-        const { data, error } = await query;
-        if (error) return [];
+       const conversations = new Map();
+       
+       for (const msg of data) {
+          const otherUser = msg.sender_id === user.id ? msg.receiver : msg.sender;
+          if (!otherUser) continue;
+          
+          const conversationId = otherUser.id;
+          if (!conversations.has(conversationId)) {
+              conversations.set(conversationId, {
+                  id: otherUser.id,
+                  name: otherUser.full_name || 'Kullanıcı',
+                  avatar: otherUser.avatar_url || 'https://picsum.photos/200',
+                  lastMsg: msg.content,
+                  time: new Date(msg.created_at),
+                  unread: (msg.receiver_id === user.id && !msg.is_read) ? 1 : 0
+              });
+          } else {
+             const conv = conversations.get(conversationId);
+             if (msg.receiver_id === user.id && !msg.is_read) {
+                 conv.unread += 1;
+             }
+          }
+       }
+       return Array.from(conversations.values());
 
-        return data.map((msg: any) => ({
-            id: msg.id,
-            senderId: msg.sender_id,
-            receiverId: msg.receiver_id,
-            content: msg.content,
-            createdAt: new Date(msg.created_at).getTime(),
-            isRead: msg.is_read
-        }));
-    } catch {
+    } catch(e) {
+        console.error("Inbox fetch error", e);
         return [];
     }
   },
 
-  markAsRead: async (otherUserId: string) => {
-      if (isSupabaseConfigured()) {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) return;
+  getChatHistory: async (userId: string, lastTime?: number): Promise<Message[]> => {
+      if (!isSupabaseConfigured()) return [];
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
 
-          await supabase
-            .from('messages')
-            .update({ is_read: true })
-            .eq('sender_id', otherUserId)
-            .eq('receiver_id', user.id)
-            .eq('is_read', false);
+      let query = supabase
+        .from('messages')
+        .select('*')
+        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${user.id})`)
+        .order('created_at', { ascending: true });
+    
+      if (lastTime) {
+          query = query.gt('created_at', new Date(lastTime).toISOString());
       }
+
+      const { data, error } = await query;
+      if (error) return [];
+
+      return data.map((m: any) => ({
+          id: m.id,
+          senderId: m.sender_id,
+          receiverId: m.receiver_id,
+          content: m.content,
+          createdAt: new Date(m.created_at).getTime(),
+          isRead: m.is_read
+      }));
   },
 
   sendMessage: async (receiverId: string, content: string): Promise<Message> => {
-    if (!isSupabaseConfigured()) throw new Error("Offline");
+      if (!isSupabaseConfigured()) throw new Error("Offline");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not logged in");
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Not logged in");
+      const { data, error } = await supabase.from('messages').insert({
+          sender_id: user.id,
+          receiver_id: receiverId,
+          content: content
+      }).select().single();
 
-    const { data, error } = await supabase
-        .from('messages')
-        .insert({
-            sender_id: user.id,
-            receiver_id: receiverId,
-            content: content
-        })
-        .select()
-        .single();
-    
-    if (error) throw error;
+      if (error) throw error;
 
-    return {
-        id: data.id,
-        senderId: data.sender_id,
-        receiverId: data.receiver_id,
-        content: data.content,
-        createdAt: new Date(data.created_at).getTime(),
-        isRead: false
-    };
+      return {
+          id: data.id,
+          senderId: data.sender_id,
+          receiverId: data.receiver_id,
+          content: data.content,
+          createdAt: new Date(data.created_at).getTime(),
+          isRead: data.is_read
+      };
   },
 
-  // --- Channel / Room Messaging ---
-  getChannels: async (): Promise<ChatChannel[]> => { 
-    return [
-      { id: 'general', name: '#Genel', description: 'Genel sohbet odası', usersOnline: 142 },
-      { id: 'support', name: '#Yardım', description: 'Uygulama hakkında sorular', usersOnline: 5 },
-      { id: 'market', name: '#Pazar', description: 'Takas ilanları hakkında', usersOnline: 24 }
-    ]; 
+  markAsRead: async (senderId: string) => {
+      if (!isSupabaseConfigured()) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      await supabase.from('messages')
+        .update({ is_read: true })
+        .eq('sender_id', senderId)
+        .eq('receiver_id', user.id)
+        .eq('is_read', false);
+  },
+
+  getChannels: async (): Promise<ChatChannel[]> => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase.from('channels').select('*');
+      if (error) return [];
+      
+      return data.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          description: c.description || '',
+          usersOnline: 0 
+      }));
   },
 
   getChannelMessages: async (channelId: string): Promise<ChannelMessage[]> => {
-    if (!isSupabaseConfigured()) return [];
-    
-    try {
-        const { data, error } = await supabase
-            .from('channel_messages')
-            .select(`
-                *,
-                sender:sender_id(full_name, avatar_url)
-            `)
-            .eq('channel_id', channelId)
-            .order('created_at', { ascending: true })
-            .limit(100);
+      if (!isSupabaseConfigured()) return [];
+      
+      const { data, error } = await supabase
+        .from('channel_messages')
+        .select(`*, profiles:sender_id(full_name, avatar_url)`)
+        .eq('channel_id', channelId)
+        .order('created_at', { ascending: true })
+        .limit(50);
 
-        if (error) throw error;
+      if (error) return [];
 
-        return data.map((msg: any) => ({
-            id: msg.id,
-            channelId: msg.channel_id,
-            senderId: msg.sender_id,
-            senderName: formatName(msg.sender?.full_name),
-            senderAvatar: msg.sender?.avatar_url || 'https://picsum.photos/100',
-            content: msg.content,
-            createdAt: msg.created_at
-        }));
-    } catch {
-        return [];
-    }
+      return data.map((m: any) => ({
+          id: m.id,
+          channelId: m.channel_id,
+          senderId: m.sender_id,
+          senderName: m.profiles?.full_name || 'Anonim',
+          senderAvatar: m.profiles?.avatar_url || 'https://picsum.photos/200',
+          content: m.content,
+          createdAt: m.created_at
+      }));
   },
 
   sendChannelMessage: async (channelId: string, content: string) => {
-      if (!isSupabaseConfigured()) throw new Error("Offline");
-
+      if (!isSupabaseConfigured()) return;
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Login required");
+      if (!user) return;
 
       const { error } = await supabase.from('channel_messages').insert({
           channel_id: channelId,
           sender_id: user.id,
-          content
+          content: content
       });
       
       if (error) throw error;
-      return {};
   }
 };
 
-// --- Swap Service ---
-
-// STRICT SUPABASE IMPLEMENTATION
 export const SwapService = {
-
   getListings: async (): Promise<SwapListing[]> => {
     if (!isSupabaseConfigured()) return [];
     
