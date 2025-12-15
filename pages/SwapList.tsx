@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Loader2, SlidersHorizontal, ChevronLeft, X, Trash2, Tag, User } from 'lucide-react';
+import { Plus, Search, Heart, Loader2, SlidersHorizontal, ChevronDown, X, ChevronLeft, Trash2, Tag, User } from 'lucide-react';
 import { SwapService, SwapListing, ReferralService } from '../types';
 
 export const SwapList: React.FC = () => {
@@ -9,7 +9,7 @@ export const SwapList: React.FC = () => {
   const [listings, setListings] = useState<SwapListing[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'market' | 'mine'>('market');
+  const [activeTab, setActiveTab] = useState<'all' | 'my'>('all');
   
   const currentUser = ReferralService.getUserProfile();
 
@@ -17,7 +17,7 @@ export const SwapList: React.FC = () => {
     setLoading(true);
     let isMounted = true;
 
-    // Safety timeout to force stop loading after 5 seconds even if DB hangs
+    // Safety timeout
     const timeout = setTimeout(() => {
         if (isMounted) setLoading(false);
     }, 5000);
@@ -47,19 +47,21 @@ export const SwapList: React.FC = () => {
   }, []);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // Kartın detayına gitmesini engelle
-    if (window.confirm('Bu ilanı silmek istediğinize emin misiniz?')) {
-      await SwapService.deleteListing(id);
-      loadListings(); // Listeyi yenile
-    }
+      e.stopPropagation();
+      if (window.confirm('Bu ilanı silmek istediğinize emin misiniz?')) {
+          await SwapService.deleteListing(id);
+          loadListings(); // Refresh list
+      }
   };
 
+  // Helper to safely render strings
   const safeStr = (val: any): string => {
     if (typeof val === 'string') return val;
     if (typeof val === 'number') return String(val);
     return '';
   };
 
+  // Helper to safely render numbers
   const safeNum = (val: any): number => {
     const num = parseFloat(val);
     return isNaN(num) ? 0 : num;
@@ -68,23 +70,24 @@ export const SwapList: React.FC = () => {
   const filteredListings = listings.filter(l => {
     if (!l) return false;
     
-    // Search filter
+    // Search Filter
     const title = safeStr(l.title).toLowerCase();
     const search = searchTerm.toLowerCase();
     const matchesSearch = title.includes(search);
 
-    // Tab filter
-    const isMine = l.ownerId === currentUser.id;
-    if (activeTab === 'mine' && !isMine) return false;
+    // Tab Filter
+    const matchesTab = activeTab === 'all' ? true : l.ownerId === currentUser.id;
 
-    return matchesSearch;
+    return matchesSearch && matchesTab;
   });
 
   return (
     <div className="pb-24 min-h-screen bg-gray-50 font-sans">
+      {/* HEADER & FILTERS */}
       <div className="bg-slate-900 pt-10 pb-6 px-4 rounded-b-[2rem] md:rounded-3xl shadow-sm sticky top-0 z-30 md:mb-6">
         
-        <div className="flex items-center gap-3 mb-5">
+        {/* Top Bar: Back & Search */}
+        <div className="flex items-center gap-3 mb-4 max-w-4xl mx-auto">
            <button 
              onClick={() => navigate(-1)} 
              className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors md:hidden"
@@ -114,42 +117,53 @@ export const SwapList: React.FC = () => {
            </div>
         </div>
 
-        {/* Tabs / Filters */}
-        <div className="flex justify-between items-center">
-            <div className="bg-slate-800 p-1 rounded-xl flex gap-1">
+        <div className="max-w-4xl mx-auto space-y-4">
+            {/* TABS (Market / My Listings) */}
+            <div className="bg-white/10 p-1 rounded-xl flex gap-1">
                 <button 
-                    onClick={() => setActiveTab('market')}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-[10px] font-bold transition-all ${activeTab === 'market' ? 'bg-white text-slate-900 shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                    onClick={() => setActiveTab('all')} 
+                    className={`flex-1 py-2 rounded-lg text-[10px] md:text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-gray-400 hover:bg-white/5'}`}
                 >
-                    <Tag size={12} /> Pazar
+                <Tag size={12} /> Pazar
                 </button>
                 <button 
-                    onClick={() => setActiveTab('mine')}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-[10px] font-bold transition-all ${activeTab === 'mine' ? 'bg-white text-slate-900 shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                    onClick={() => setActiveTab('my')} 
+                    className={`flex-1 py-2 rounded-lg text-[10px] md:text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'my' ? 'bg-white text-slate-900 shadow-sm' : 'text-gray-400 hover:bg-white/5'}`}
                 >
-                    <User size={12} /> İlanlarım
+                <User size={12} /> İlanlarım
                 </button>
             </div>
 
-            <button className="flex items-center gap-1.5 bg-[#FF80AB] text-white px-3 py-2 rounded-xl text-[10px] font-bold shrink-0 shadow-lg shadow-pink-500/20 active:scale-95 transition-transform">
-                <SlidersHorizontal size={12} />
-            </button>
+            {/* Filter Chips */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                <button className="flex items-center gap-1.5 bg-[#FF80AB] text-white px-4 py-2 rounded-xl text-[10px] font-bold shrink-0 shadow-lg shadow-pink-500/20 active:scale-95 transition-transform">
+                    <SlidersHorizontal size={12} /> Filtrele
+                </button>
+                
+                {['Sırala', 'Fiyat Aralığı', 'Konum', 'Kategori'].map((f, i) => (
+                    <button key={i} className="flex items-center gap-1.5 bg-white/5 text-gray-300 px-4 py-2 rounded-xl text-[10px] font-bold shrink-0 border border-white/5 hover:bg-white/10 transition-colors active:scale-95">
+                        {f} <ChevronDown size={12} className="opacity-50" />
+                    </button>
+                ))}
+            </div>
         </div>
       </div>
 
+      {/* FAB - Floating Action Button */}
       <button 
         onClick={() => navigate('/swap/create')} 
-        className="fixed bottom-24 right-5 md:bottom-10 md:right-10 bg-slate-900 text-white w-14 h-14 rounded-full shadow-xl shadow-slate-900/40 flex items-center justify-center z-40 active:scale-90 transition-transform hover:scale-105 border-4 border-white/10"
+        className="fixed bottom-24 right-5 md:bottom-10 md:right-10 bg-slate-900 text-white w-14 h-14 rounded-full shadow-xl shadow-slate-900/40 flex items-center justify-center z-40 active:scale-90 transition-transform hover:scale-105 border-4 border-white/10 group"
       >
-        <Plus size={24} />
+        <Plus size={24} className="group-hover:rotate-90 transition-transform" />
       </button>
 
-      <div className="px-4 mt-4 relative z-20">
+      {/* CONTENT GRID */}
+      <div className="px-4 mt-4 relative z-20 max-w-4xl mx-auto">
          <div className="flex justify-between items-center mb-4 px-1">
-            <h2 className="font-bold text-slate-800 text-sm">
-                {activeTab === 'market' ? 'Vitrin Ürünleri' : 'İlanlarım'}
+            <h2 className="font-bold text-slate-800 text-sm md:text-base">
+                {activeTab === 'all' ? 'Vitrin Ürünleri' : 'İlanlarım'}
             </h2>
-            <button onClick={loadListings} className="text-[10px] text-primary font-bold flex items-center gap-1">
+            <button onClick={loadListings} className="text-[10px] text-primary font-bold flex items-center gap-1 hover:bg-gray-100 px-2 py-1 rounded-md transition-colors">
                {loading && <Loader2 size={10} className="animate-spin"/>} Yenile
             </button>
          </div>
@@ -158,23 +172,23 @@ export const SwapList: React.FC = () => {
             <div className="flex flex-col items-center justify-center py-20 text-gray-400">
                <Loader2 size={32} className="animate-spin text-primary mb-2" />
                <p className="text-xs">Yükleniyor...</p>
-               <button onClick={() => setLoading(false)} className="mt-4 text-[10px] text-blue-500 underline">
-                   Çok uzun sürdüyse tıklayın
-               </button>
             </div>
          ) : filteredListings.length === 0 ? (
             <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100">
                <p className="text-gray-400 text-xs font-medium">
-                   {activeTab === 'mine' ? 'Henüz hiç ilan vermediniz.' : 'Aradığınız kriterlere uygun ilan bulunamadı.'}
+                   {activeTab === 'all' 
+                    ? 'Aradığınız kriterlere uygun ilan bulunamadı.' 
+                    : 'Henüz hiç ilan oluşturmadınız.'}
                </p>
-               {activeTab === 'market' && (
-                   <button onClick={() => setSearchTerm('')} className="mt-2 text-primary text-xs font-bold">Aramayı Temizle</button>
+               {activeTab === 'all' && (
+                  <button onClick={() => setSearchTerm('')} className="mt-2 text-primary text-xs font-bold">Aramayı Temizle</button>
                )}
-               {activeTab === 'mine' && (
-                   <button onClick={() => navigate('/swap/create')} className="mt-2 text-primary text-xs font-bold">Hemen İlan Ver</button>
+               {activeTab === 'my' && (
+                  <button onClick={() => navigate('/swap/create')} className="mt-2 text-primary text-xs font-bold">İlk İlanını Oluştur</button>
                )}
             </div>
          ) : (
+            // RESPONSIVE GRID: 2 cols on mobile, 3 on md, 4 on lg
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 pb-4">
                {filteredListings.map((item, index) => {
                   if (!item) return null;
@@ -184,6 +198,8 @@ export const SwapList: React.FC = () => {
                   const itemOwnerName = safeStr(item.ownerName);
                   const itemOwnerAvatar = safeStr(item.ownerAvatar);
                   const itemPrice = safeNum(item.requiredBalance);
+                  
+                  // Check Ownership
                   const isOwner = item.ownerId === currentUser.id;
 
                   return (
@@ -192,6 +208,7 @@ export const SwapList: React.FC = () => {
                       onClick={() => navigate(`/swap/${itemId}`)} 
                       className="bg-white rounded-2xl p-2.5 shadow-sm border border-gray-100 active:scale-[0.98] transition-all cursor-pointer hover:shadow-md group flex flex-col h-full"
                     >
+                       {/* Image */}
                        <div className="relative aspect-[3/4] bg-gray-50 rounded-xl overflow-hidden mb-3">
                           <img 
                             src={itemPhoto} 
@@ -201,23 +218,28 @@ export const SwapList: React.FC = () => {
                           
                           <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
   
-                          {/* Delete Button for Owner */}
-                          {isOwner && (
-                              <button 
+                          {isOwner ? (
+                             <button 
                                 onClick={(e) => handleDelete(e, itemId)}
-                                className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-lg shadow-sm hover:bg-red-600 transition-colors z-20"
-                              >
-                                  <Trash2 size={12} />
-                              </button>
+                                className="absolute top-2 right-2 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-all shadow-sm z-10"
+                             >
+                                <Trash2 size={14} />
+                             </button>
+                          ) : (
+                             <button 
+                                onClick={(e) => { e.stopPropagation(); }}
+                                className="absolute top-2 right-2 w-8 h-8 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white hover:text-red-500 transition-all shadow-sm z-10"
+                             >
+                                <Heart size={14} className={index % 2 === 0 ? "fill-red-500 text-red-500" : "text-white"} />
+                             </button>
                           )}
-
-                          {!isOwner && (
-                            <div className="absolute bottom-2 left-2 bg-[#FF80AB] px-2 py-1 rounded-lg shadow-sm">
-                                <span className="text-[8px] font-black text-white uppercase tracking-wide">YENİ GİBİ</span>
-                            </div>
-                          )}
+                          
+                          <div className="absolute bottom-2 left-2 bg-[#FF80AB] px-2 py-1 rounded-lg shadow-sm">
+                             <span className="text-[8px] font-black text-white uppercase tracking-wide">YENİ GİBİ</span>
+                          </div>
                        </div>
   
+                       {/* Details */}
                        <div className="px-1 space-y-1 flex-1 flex flex-col">
                           <div className="flex justify-between items-start gap-2">
                              <h3 className="text-xs font-bold text-slate-800 line-clamp-2 leading-snug min-h-[2.5em]">
@@ -228,7 +250,7 @@ export const SwapList: React.FC = () => {
                           <div className="flex items-center gap-1.5 py-1">
                              <img src={itemOwnerAvatar} alt={itemOwnerName} className="w-4 h-4 rounded-full border border-gray-100" />
                              <span className="text-[9px] text-gray-400 font-medium truncate max-w-[80px]">
-                               {isOwner ? 'Siz' : itemOwnerName}
+                               {isOwner ? 'Sen' : itemOwnerName}
                              </span>
                           </div>
   
