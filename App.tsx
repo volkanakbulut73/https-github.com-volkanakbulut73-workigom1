@@ -30,20 +30,18 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   useEffect(() => {
     let mounted = true;
     
-    // Safety timeout: If auth check hangs for 10s, force stop loading.
+    // Safety timeout: If auth check hangs for 4s, force stop loading.
     const safetyTimer = setTimeout(() => {
         if (mounted && isLoading) {
             console.warn("Auth check timed out - forcing state.");
             setIsLoading(false);
-            // If we have a local user, assume authenticated, otherwise kick out
             const localUser = ReferralService.getUserProfile();
             setIsAuthenticated(localUser.id !== 'current-user');
         }
-    }, 10000);
+    }, 4000);
 
     const initializeAuth = async () => {
       // 1. Optimistic Check: Local Storage
-      // If we are NOT in an OAuth redirect flow, trust local storage immediately to unblock UI
       const isOAuthRedirect = window.location.hash && window.location.hash.includes('access_token');
       const localUser = ReferralService.getUserProfile();
       
@@ -57,13 +55,11 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
       // 2. Supabase Check
       if (isSupabaseConfigured()) {
           try {
-              // getSession automatically handles OAuth tokens in URL hash
               const { data: { session }, error } = await supabase.auth.getSession();
 
               if (session?.user) {
                  await handleUserSession(session.user);
               } else {
-                 // If no session and NOT waiting for OAuth redirect to process
                  if (!isOAuthRedirect) {
                      if (mounted) { setIsAuthenticated(false); setIsLoading(false); }
                  }
@@ -73,48 +69,56 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
               if (mounted) { setIsAuthenticated(false); setIsLoading(false); }
           }
       } else {
-          // No config
           if (mounted) { setIsAuthenticated(false); setIsLoading(false); }
       }
     };
 
     const handleUserSession = async (user: any) => {
+        // 1. Construct temporary profile from Auth User Data (available immediately)
+        // This ensures the user sees their name/avatar instantly without waiting for DB
+        const tempUser: User = {
+            id: user.id,
+            name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Kullanıcı',
+            avatar: user.user_metadata?.avatar_url || 'https://picsum.photos/200',
+            rating: 5.0,
+            location: 'İstanbul',
+            goldenHearts: 0,
+            silverHearts: 0,
+            isAvailable: true,
+            referralCode: 'YUKLENIYOR', 
+            wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
+        };
+        
+        // Save temp profile to unblock UI with valid-looking data
+        ReferralService.saveUserProfile(tempUser);
+
+        // 2. Immediate UI unlock - Do not wait for DB
+        if (mounted) {
+            setIsAuthenticated(true);
+            setIsLoading(false);
+        }
+
+        // 3. Background Fetch from DB for Wallet/Real Data
         try {
-            // Try to get updated profile from DB
             const profile = await DBService.getUserProfile(user.id);
             if (profile) {
                 ReferralService.saveUserProfile(profile);
-                if (mounted) setIsAuthenticated(true);
             } else {
-                // If profile missing in DB, create it
-                const newProfile: User = {
-                    id: user.id,
-                    name: user.user_metadata.full_name || user.email?.split('@')[0] || 'Yeni Kullanıcı',
-                    avatar: user.user_metadata.avatar_url || 'https://picsum.photos/200',
-                    rating: 5.0,
-                    location: 'İstanbul',
-                    goldenHearts: 0,
-                    silverHearts: 0,
-                    isAvailable: true,
-                    referralCode: 'REF' + Math.random().toString(36).substring(2, 8).toUpperCase(),
-                    wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
-                };
-                await DBService.upsertProfile(newProfile);
-                ReferralService.saveUserProfile(newProfile);
-                if (mounted) setIsAuthenticated(true);
+                 // First time user? Upsert default profile
+                 const newProfile = { 
+                     ...tempUser, 
+                     referralCode: 'REF' + Math.random().toString(36).substring(2, 8).toUpperCase() 
+                 };
+                 await DBService.upsertProfile(newProfile);
+                 ReferralService.saveUserProfile(newProfile);
             }
         } catch (e) {
-            console.error("Profile load error", e);
-            // Even if profile load fails, if we have a session, we might want to stay logged in
-            // but for safety, let's keep authentication true if we had a local user
-            if (mounted) setIsAuthenticated(true);
+            console.error("Profile background sync error", e);
         } finally {
-            if (mounted) setIsLoading(false);
             clearTimeout(safetyTimer);
         }
     };
 
-    // Listen for auth state changes (Sign In, Sign Out, Token Refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
             if (session?.user) {
@@ -142,7 +146,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
             <div className="flex flex-col items-center gap-3">
                 <Loader2 className="animate-spin text-slate-900" size={32} />
-                <p className="text-sm font-bold text-gray-500">Oturum açılıyor...</p>
+                <p className="text-sm font-bold text-gray-500">Workigom Başlatılıyor...</p>
             </div>
         </div>
       );

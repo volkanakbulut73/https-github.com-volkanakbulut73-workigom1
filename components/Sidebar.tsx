@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Home, Heart, ArrowLeftRight, User, LogOut, Plus, Wallet, MessageCircle } from 'lucide-react';
 import { ReferralService } from '../types';
@@ -7,7 +7,14 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
-  const user = ReferralService.getUserProfile();
+  const [user, setUser] = useState(ReferralService.getUserProfile());
+
+  useEffect(() => {
+    // Profil güncellemelerini dinle (Login sonrası veya bakiye güncellemesi)
+    const handleStorage = () => setUser(ReferralService.getUserProfile());
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   const handleLogout = async () => {
     // 1. Önce yerel veriyi temizle ve yönlendir
