@@ -33,24 +33,19 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
       // 1. Önce LocalStorage kontrolü
       const localUser = ReferralService.getUserProfile();
       if (localUser.id !== 'current-user') {
-          if (mounted) {
-            setIsAuthenticated(true);
-            setIsLoading(false);
-          }
-          return;
+          // Local storage var, Supabase bağlantısı kopuk olsa bile session varmış gibi davranabiliriz 
+          // ancak doğrusu Supabase session'ı beklemektir.
+          // Yine de hızlı yükleme için local'i kullanıp arka planda sync yapabiliriz.
       }
 
-      // 2. Supabase Oturum Kontrolü (Zaman aşımlı)
+      // 2. Supabase Oturum Kontrolü
       if (isSupabaseConfigured()) {
           const isOAuthRedirect = window.location.hash && window.location.hash.includes('access_token');
           if (isOAuthRedirect) return;
 
           try {
-              // Timeout ekle: Eğer 4 saniyede yanıt gelmezse oturum yok say.
-              const sessionPromise = supabase.auth.getSession();
-              const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 4000));
-
-              const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+              // Oturum kontrolü
+              const { data: { session } } = await supabase.auth.getSession();
 
               if (session?.user) {
                  await handleUserSession(session.user);
@@ -58,10 +53,11 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                  if (mounted) { setIsAuthenticated(false); setIsLoading(false); }
               }
           } catch (error) {
-              console.warn("Auth check timed out or failed:", error);
+              console.warn("Auth check failed:", error);
               if (mounted) { setIsAuthenticated(false); setIsLoading(false); }
           }
       } else {
+          // Config yoksa login sayfasına at
           if (mounted) { setIsAuthenticated(false); setIsLoading(false); }
       }
     };
@@ -73,6 +69,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 ReferralService.saveUserProfile(profile);
                 if (mounted) setIsAuthenticated(true);
             } else {
+                // Profil veritabanında yoksa (örn: Google ile ilk giriş), oluşturalım.
                 const newProfile: User = {
                     id: user.id,
                     name: user.user_metadata.full_name || user.email?.split('@')[0] || 'Yeni Kullanıcı',
@@ -85,6 +82,11 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     referralCode: 'REF' + Math.random().toString(36).substring(2, 8).toUpperCase(),
                     wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
                 };
+                
+                // Veritabanına kaydet
+                await DBService.upsertProfile(newProfile);
+                
+                // Locale kaydet
                 ReferralService.saveUserProfile(newProfile);
                 if (mounted) setIsAuthenticated(true);
             }

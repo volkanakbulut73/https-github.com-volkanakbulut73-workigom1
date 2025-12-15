@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Lock, Mail, ArrowRight, ShoppingBag, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '../components/Button';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { User, ReferralService } from '../types';
+import { User, ReferralService, DBService } from '../types';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -21,7 +21,7 @@ export const Login: React.FC = () => {
 
     // Supabase kontrolü
     if (!isSupabaseConfigured()) {
-       setError("Veritabanı yapılandırması eksik. Lütfen .env dosyasını kontrol edin.");
+       setError("Veritabanı yapılandırması eksik. Lütfen .env dosyasını kontrol edin veya geliştirici ile iletişime geçin.");
        setIsLoading(false);
        return;
     }
@@ -35,31 +35,6 @@ export const Login: React.FC = () => {
       if (authError) throw authError;
 
       if (authData.user) {
-        // Profil bilgisini çek
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', authData.user.id)
-          .single();
-
-        const appUser: User = {
-          id: authData.user.id,
-          name: profile?.full_name || email.split('@')[0],
-          avatar: profile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-          rating: parseFloat(profile?.rating || '5.0'),
-          location: profile?.location || 'Konum Belirtilmedi',
-          goldenHearts: profile?.golden_hearts || 0,
-          silverHearts: profile?.silver_hearts || 0,
-          isAvailable: true,
-          referralCode: profile?.referral_code || 'REFNEW',
-          wallet: {
-            balance: parseFloat(profile?.wallet_balance || '0'),
-            totalEarnings: parseFloat(profile?.total_earnings || '0'),
-            pendingBalance: 0
-          }
-        };
-
-        ReferralService.saveUserProfile(appUser);
         navigate('/app');
       }
     } catch (err: any) {
@@ -117,7 +92,7 @@ export const Login: React.FC = () => {
         </div>
 
         {error && (
-          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 text-center font-bold border border-red-100">
+          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 text-center font-bold border border-red-100 animate-pulse">
             {error}
           </div>
         )}

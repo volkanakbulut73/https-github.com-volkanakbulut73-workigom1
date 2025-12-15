@@ -166,6 +166,19 @@ export const calculateTransaction = (amount: number, percentage: 20 | 100) => {
   };
 };
 
+// URL Sanitization Helpers
+const sanitizePhotoUrl = (url: string | null | undefined): string => {
+    if (!url) return 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60';
+    if (url.startsWith('blob:')) return 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60';
+    return url;
+};
+
+const sanitizeAvatarUrl = (url: string | null | undefined): string => {
+    if (!url) return 'https://picsum.photos/200';
+    if (url.startsWith('blob:')) return 'https://picsum.photos/200';
+    return url;
+};
+
 // --- Services ---
 
 const DEFAULT_USER: User = {
@@ -189,7 +202,13 @@ export const ReferralService = {
   getUserProfile: (): User => {
     try {
       const stored = localStorage.getItem('user_profile');
-      return stored ? JSON.parse(stored) : DEFAULT_USER;
+      if (stored) {
+          const user = JSON.parse(stored);
+          // Sanitize avatar in case local storage has a blob url
+          user.avatar = sanitizeAvatarUrl(user.avatar);
+          return user;
+      }
+      return DEFAULT_USER;
     } catch {
       return DEFAULT_USER;
     }
@@ -233,12 +252,13 @@ export const TransactionService = {
 
 export const DBService = {
   getUserProfile: async (id: string): Promise<User | null> => {
-    // Demo verileri engellemek için doğrudan sorgu yapıyoruz
     try {
         const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
         
         if (error) { 
-            console.error("Profile fetch error (Supabase):", error);
+            if (error.code !== 'PGRST116') {
+                console.warn("Profile fetch error:", error);
+            }
             return null;
         }
         
@@ -246,7 +266,7 @@ export const DBService = {
             return {
                 id: data.id,
                 name: data.full_name,
-                avatar: data.avatar_url || 'https://picsum.photos/200',
+                avatar: sanitizeAvatarUrl(data.avatar_url),
                 rating: data.rating || 5.0,
                 location: data.location || 'İstanbul',
                 goldenHearts: data.golden_hearts || 0,
@@ -266,7 +286,29 @@ export const DBService = {
     return null;
   },
 
+  upsertProfile: async (user: User) => {
+      if (!isSupabaseConfigured()) return;
+      
+      const { error } = await supabase.from('profiles').upsert({
+          id: user.id,
+          full_name: user.name,
+          avatar_url: user.avatar,
+          rating: user.rating,
+          location: user.location,
+          golden_hearts: user.goldenHearts,
+          silver_hearts: user.silverHearts,
+          referral_code: user.referralCode,
+          wallet_balance: user.wallet.balance,
+          total_earnings: user.wallet.totalEarnings
+      }, { onConflict: 'id' });
+
+      if (error) {
+          console.error("Upsert profile error:", error);
+      }
+  },
+
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
+    if (!isSupabaseConfigured()) return null;
     try {
         const { data, error } = await supabase
             .from('transactions')
@@ -276,10 +318,11 @@ export const DBService = {
             .neq('status', 'cancelled')
             .order('created_at', { ascending: false })
             .limit(1)
-            .single();
+            .maybeSingle(); // Use maybeSingle to avoid 406/PGRST116 errors in console
 
-        if (error && error.code !== 'PGRST116') { // PGRST116: no rows found
+        if (error) { 
              console.error("Get Active Tx Error:", error);
+             return null;
         }
 
         if (data) {
@@ -332,7 +375,14 @@ export const DBService = {
             .order('created_at', { ascending: false });
         
         if (error) throw error;
-        return data || [];
+        
+        // Map and sanitize avatars
+        return (data || []).map((item: any) => {
+            if (item.profiles) {
+                item.profiles.avatar_url = sanitizeAvatarUrl(item.profiles.avatar_url);
+            }
+            return item;
+        });
     } catch (e) {
         console.error("Pending transactions error:", e);
         return [];
@@ -450,13 +500,11 @@ export const DBService = {
   // --- Chat & Messages ---
 
   getInbox: async (): Promise<{ id: string; name: string; avatar: string; lastMsg: string; time: Date; unread: number; }[]> => {
-    // Check if authenticated
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return [];
     const user = session.user;
 
     try {
-       // Fetch messages where current user is sender or receiver
        const { data, error } = await supabase
         .from('messages')
         .select(`
@@ -481,7 +529,7 @@ export const DBService = {
               conversations.set(conversationId, {
                   id: otherUser.id,
                   name: otherUser.full_name || 'Kullanıcı',
-                  avatar: otherUser.avatar_url || 'https://picsum.photos/200',
+                  avatar: sanitizeAvatarUrl(otherUser.avatar_url),
                   lastMsg: msg.content,
                   time: new Date(msg.created_at),
                   unread: (msg.receiver_id === user.id && !msg.is_read) ? 1 : 0
@@ -588,7 +636,7 @@ export const DBService = {
           channelId: m.channel_id,
           senderId: m.sender_id,
           senderName: m.profiles?.full_name || 'Anonim',
-          senderAvatar: m.profiles?.avatar_url || 'https://picsum.photos/200',
+          senderAvatar: sanitizeAvatarUrl(m.profiles?.avatar_url),
           content: m.content,
           createdAt: m.created_at
       }));
@@ -610,7 +658,6 @@ export const DBService = {
 
 export const SwapService = {
   getListings: async (): Promise<SwapListing[]> => {
-    // Demo veriyi engelledik. Hata varsa loglar.
     try {
         const { data, error } = await supabase
             .from('swap_listings')
@@ -619,24 +666,25 @@ export const SwapService = {
 
         if (error) {
             console.error("Listings fetch error (Supabase):", error);
-            // Hata olsa bile boş dizi dönüyoruz ki uygulama çökmesin ama veri gelmez.
             return [];
         }
         
         if (!data) return [];
 
-        return data.map((item: any) => ({
-            id: item.id,
-            title: item.title,
-            description: item.description,
-            requiredBalance: item.required_balance,
-            photoUrl: item.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
-            location: item.location || 'İstanbul',
-            ownerId: item.owner_id,
-            ownerName: item.owner_name || 'Kullanıcı',
-            ownerAvatar: item.owner_avatar || 'https://picsum.photos/200',
-            createdAt: item.created_at
-        }));
+        return data.map((item: any) => {
+            return {
+              id: item.id,
+              title: item.title,
+              description: item.description,
+              requiredBalance: item.required_balance,
+              photoUrl: sanitizePhotoUrl(item.photo_url),
+              location: item.location || 'İstanbul',
+              ownerId: item.owner_id,
+              ownerName: item.owner_name || 'Kullanıcı',
+              ownerAvatar: sanitizeAvatarUrl(item.owner_avatar),
+              createdAt: item.created_at
+            };
+        });
     } catch (e) {
         console.error("Swap Service Critical Error:", e);
         return [];
@@ -662,11 +710,11 @@ export const SwapService = {
                 title: data.title,
                 description: data.description,
                 requiredBalance: data.required_balance,
-                photoUrl: data.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
+                photoUrl: sanitizePhotoUrl(data.photo_url),
                 location: data.location || 'İstanbul',
                 ownerId: data.owner_id,
                 ownerName: data.owner_name || 'Kullanıcı',
-                ownerAvatar: data.owner_avatar || 'https://picsum.photos/200',
+                ownerAvatar: sanitizeAvatarUrl(data.owner_avatar),
                 createdAt: data.created_at
              };
          }
