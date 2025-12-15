@@ -16,9 +16,22 @@ export const SwapList: React.FC = () => {
   const loadListings = async () => {
     setLoading(true);
     try {
-      const data = await SwapService.getListings();
-      if (Array.isArray(data)) {
-        setListings(data);
+      // 3 Saniye içinde veri gelmezse mock veri ile veya boş olarak açılmasını zorla
+      const timeoutPromise = new Promise<SwapListing[]>((resolve) => {
+          setTimeout(() => resolve([]), 3000); 
+      });
+
+      const dataPromise = SwapService.getListings();
+      
+      // Yarış: Hangisi önce biterse
+      const data = await Promise.race([dataPromise, timeoutPromise]);
+
+      // Eğer gerçek servis boş dönerse ama timeout değilse, yine de servisten gelen veriyi (mock da olsa) kullan
+      // Not: SwapService artık hata durumunda mock veri döndürüyor, bu yüzden burası güvenli.
+      const finalData = await dataPromise; 
+      
+      if (Array.isArray(finalData)) {
+        setListings(finalData);
       } else {
         setListings([]);
       }

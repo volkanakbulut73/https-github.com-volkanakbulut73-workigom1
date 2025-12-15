@@ -18,7 +18,6 @@ import { Register } from './pages/Register';
 import { Invite } from './pages/Invite';
 import { Earnings } from './pages/Earnings';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
-import { Chat } from './pages/Chat';
 import { ReferralService, DBService, User } from './types'; 
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
@@ -203,8 +202,6 @@ const AppRoutes: React.FC = () => {
       <Route path="/invite" element={<DashboardLayout><Invite /></DashboardLayout>} />
       <Route path="/earnings" element={<DashboardLayout><Earnings /></DashboardLayout>} />
       
-      <Route path="/chat" element={<DashboardLayout><Chat /></DashboardLayout>} />
-
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Plus, Heart, User, MessageCircle } from 'lucide-react';
+import { Home, Plus, Heart, User } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
   const location = useLocation();
@@ -41,7 +41,6 @@ export const BottomNav: React.FC = () => {
         </Link>
       </div>
 
-      <NavItem to="/chat" icon={MessageCircle} label="Sohbet" active={isActive('/chat')} />
       <NavItem to="/profile" icon={User} label="Profil" active={isActive('/profile')} />
     </nav>
   );
