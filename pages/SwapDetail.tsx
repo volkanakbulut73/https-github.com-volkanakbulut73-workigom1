@@ -45,16 +45,7 @@ export const SwapDetail: React.FC = () => {
   };
 
   const handleMessage = async () => {
-    if (isSupabaseConfigured()) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-            if(window.confirm("Mesaj göndermek için giriş yapmalısınız. Giriş sayfasına gitmek ister misiniz?")) {
-                navigate('/login');
-            }
-            return;
-        }
-    }
-    navigate(`/messages/${listing.ownerId}`);
+     alert("Mesajlaşma özelliği şu an bakımda. Lütfen daha sonra tekrar deneyin.");
   };
 
   return (

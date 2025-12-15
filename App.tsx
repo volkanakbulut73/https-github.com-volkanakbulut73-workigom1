@@ -10,8 +10,6 @@ import { Landing } from './pages/Landing';
 import { FindShare } from './pages/FindShare';
 import { Supporters } from './pages/Supporters';
 import { Profile } from './pages/Profile';
-import { Messages } from './pages/Messages';
-import { ChatRooms } from './pages/ChatRooms';
 import { SwapList } from './pages/SwapList';
 import { SwapCreate } from './pages/SwapCreate';
 import { SwapDetail } from './pages/SwapDetail';
@@ -166,10 +164,9 @@ const AppRoutes: React.FC = () => {
       <Route path="/find-share" element={<DashboardLayout><FindShare /></DashboardLayout>} />
       <Route path="/supporters" element={<DashboardLayout><Supporters /></DashboardLayout>} />
       <Route path="/profile" element={<DashboardLayout><Profile /></DashboardLayout>} />
-      <Route path="/messages" element={<DashboardLayout><Messages /></DashboardLayout>} />
-      <Route path="/messages/:userId" element={<DashboardLayout><Messages /></DashboardLayout>} />
-      <Route path="/chatrooms" element={<DashboardLayout><ChatRooms /></DashboardLayout>} />
-      <Route path="/chatrooms/:channelId" element={<DashboardLayout><ChatRooms /></DashboardLayout>} />
+      
+      {/* Chat Routes Removed */}
+      
       <Route path="/swap" element={<DashboardLayout><SwapList /></DashboardLayout>} />
       <Route path="/swap/create" element={<DashboardLayout><SwapCreate /></DashboardLayout>} />
       <Route path="/swap/:id" element={<DashboardLayout><SwapDetail /></DashboardLayout>} />

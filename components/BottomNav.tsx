@@ -1,22 +1,18 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Plus, Heart, User, ArrowLeftRight, Hash } from 'lucide-react';
+import { Home, Plus, Heart, User } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
   const location = useLocation();
   const currentPath = location.pathname;
-
-  const isMessageDetail = /^\/messages\/.+/.test(currentPath);
-  const isChatRoomDetail = /^\/chatrooms\/.+/.test(currentPath);
 
   // Hide on Landing Page ('/'), Login, Register, or detail pages where necessary
   const shouldHide = 
     currentPath === '/' ||
     currentPath === '/login' || 
     currentPath === '/register' || 
-    currentPath === '/swap/create' ||
-    isMessageDetail;
+    currentPath === '/swap/create';
 
   if (shouldHide) {
     return null;
@@ -45,7 +41,7 @@ export const BottomNav: React.FC = () => {
         </Link>
       </div>
 
-      <NavItem to="/chatrooms" icon={Hash} label="Odalar" active={isActive('/chatrooms')} />
+      {/* Chat Room Removed */}
       <NavItem to="/profile" icon={User} label="Profil" active={isActive('/profile')} />
     </nav>
   );

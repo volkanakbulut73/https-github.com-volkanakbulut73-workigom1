@@ -95,6 +95,7 @@ export interface SwapListing {
   createdAt: string; // Changed to string for consistency with DB timestamptz
 }
 
+// Simplified Message interface to prevent breakage in orphaned files (though unused)
 export interface Message {
   id: string;
   senderId: string;
@@ -104,10 +105,17 @@ export interface Message {
   isRead: boolean;
 }
 
-// --- NEW CHAT ROOM TYPES ---
+export interface RewardLog {
+  id: string;
+  sourceUserName: string;
+  amount: number;
+  createdAt: number;
+}
+
+// Added for ChatRooms
 export interface ChatChannel {
   id: string;
-  name: string; // e.g. "#genel"
+  name: string;
   description: string;
   usersOnline: number;
 }
@@ -119,14 +127,7 @@ export interface ChannelMessage {
   senderName: string;
   senderAvatar: string;
   content: string;
-  createdAt: string; // ISO string
-}
-
-export interface RewardLog {
-  id: string;
-  sourceUserName: string;
-  amount: number;
-  createdAt: number;
+  createdAt: string;
 }
 
 // --- Helpers ---
@@ -473,114 +474,31 @@ export const DBService = {
 
   uploadAvatar: async (file: File) => { return await fileToBase64(file); },
 
-  // --- Messaging (Mock) ---
+  // --- Stubbed Messaging ---
   getInbox: async () => { return []; },
   getChatHistory: async (userId: string, lastTime?: number) => { return []; },
   markAsRead: async (userId: string) => {},
   sendMessage: async (userId: string, content: string) => {
+    // Return dummy message to satisfy TS in orphaned files, but effectively disabled
     return {
-      id: `msg-${Date.now()}`,
-      senderId: 'current-user',
-      receiverId: userId,
-      content,
+      id: 'disabled',
+      senderId: 'disabled',
+      receiverId: 'disabled',
+      content: '',
       createdAt: Date.now(),
-      isRead: false
+      isRead: true
     };
   },
-
-  // --- CHAT ROOMS ---
-  getChannels: async (): Promise<ChatChannel[]> => {
-     const mocks: ChatChannel[] = [
-       { id: 'general', name: '#genel', description: 'Workigom genel sohbet alanı', usersOnline: 124 },
-       { id: 'trade', name: '#takas-pazari', description: 'İlanlar hakkında tartışma', usersOnline: 45 },
-       { id: 'support', name: '#yardim-destek', description: 'Kullanıcı yardımlaşma alanı', usersOnline: 12 },
-       { id: 'food', name: '#yemek-onerileri', description: 'Hangi restoran, hangi menü?', usersOnline: 28 },
-     ];
-     try {
-         if (isSupabaseConfigured()) {
-             const { data, error } = await supabase.from('channels').select('*');
-             if (!error && data && data.length > 0) {
-                 return data.map((c: any) => ({
-                     id: c.id,
-                     name: c.name,
-                     description: c.topic || '',
-                     usersOnline: Math.floor(Math.random() * 50) + 5
-                 }));
-             }
-         }
-     } catch (e) {
-         console.warn("Error fetching channels", e);
-     }
-     return mocks;
+  getChannels: async (): Promise<ChatChannel[]> => { 
+    // Mock channel list
+    return [
+      { id: 'general', name: '#Genel', description: 'Genel sohbet odası', usersOnline: 142 },
+      { id: 'support', name: '#Yardım', description: 'Uygulama hakkında sorular', usersOnline: 5 },
+      { id: 'market', name: '#Pazar', description: 'Takas ilanları hakkında', usersOnline: 24 }
+    ]; 
   },
-
-  getChannelMessages: async (channelId: string): Promise<ChannelMessage[]> => {
-     try {
-        if (isSupabaseConfigured()) {
-            const { data, error } = await supabase
-                .from('channel_messages')
-                .select('*, profiles(full_name, avatar_url)')
-                .eq('channel_id', channelId)
-                .order('created_at', { ascending: true })
-                .limit(50);
-                
-            if (!error && data) {
-                return data.map((m: any) => ({
-                    id: m.id,
-                    channelId: m.channel_id,
-                    senderId: m.sender_id,
-                    senderName: m.profiles?.full_name || 'Anonim',
-                    senderAvatar: m.profiles?.avatar_url || 'https://picsum.photos/100',
-                    content: m.content,
-                    createdAt: m.created_at
-                }));
-            }
-        }
-     } catch (e) {
-        console.warn("Error fetching messages", e);
-     }
-     return [];
-  },
-
-  sendChannelMessage: async (channelId: string, content: string): Promise<ChannelMessage> => {
-      const user = ReferralService.getUserProfile();
-      try {
-          if (isSupabaseConfigured()) {
-              const { data: { user: authUser } } = await supabase.auth.getUser();
-              if (authUser) {
-                  const { data } = await supabase
-                      .from('channel_messages')
-                      .insert({ channel_id: channelId, sender_id: authUser.id, content: content })
-                      .select('*, profiles(full_name, avatar_url)')
-                      .single();
-                  
-                  if (data) {
-                     return {
-                        id: data.id,
-                        channelId: data.channel_id,
-                        senderId: data.sender_id,
-                        senderName: data.profiles?.full_name || user.name,
-                        senderAvatar: data.profiles?.avatar_url || user.avatar,
-                        content: data.content,
-                        createdAt: data.created_at
-                     };
-                  }
-              }
-          }
-      } catch (e) {
-          console.error("Message send failed", e);
-          throw e;
-      }
-      return {
-          id: `msg-${Date.now()}`,
-          channelId,
-          senderId: user.id,
-          senderName: user.name,
-          senderAvatar: user.avatar,
-          content,
-          createdAt: new Date().toISOString()
-      };
-  }
+  getChannelMessages: async (channelId: string): Promise<ChannelMessage[]> => { return []; },
+  sendChannelMessage: async (channelId: string, content: string) => { return {}; }
 };
 
 // --- Swap Service ---

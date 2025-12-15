@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Heart, ArrowLeftRight, User, MessageCircle, LogOut, Plus, Wallet, Hash } from 'lucide-react';
+import { Home, Heart, ArrowLeftRight, User, LogOut, Plus, Wallet } from 'lucide-react';
 import { ReferralService } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -10,11 +10,11 @@ export const Sidebar: React.FC = () => {
   const user = ReferralService.getUserProfile();
 
   const handleLogout = async () => {
-    // 1. Önce yerel veriyi temizle ve yönlendir (Kullanıcıyı bekletme)
+    // 1. Önce yerel veriyi temizle ve yönlendir
     ReferralService.logout();
     navigate('/login');
 
-    // 2. Ardından Supabase oturumunu kapatmayı dene (Hata verirse önemli değil)
+    // 2. Ardından Supabase oturumunu kapatmayı dene
     if (isSupabaseConfigured()) {
       try {
           await supabase.auth.signOut();
@@ -52,9 +52,7 @@ export const Sidebar: React.FC = () => {
         <nav className="space-y-2">
           <NavItem to="/app" icon={Home} label="Ana Sayfa" />
           <NavItem to="/supporters" icon={Heart} label="Paylaşım Talepleri" />
-          <NavItem to="/chatrooms" icon={Hash} label="Sohbet Odaları" />
           <NavItem to="/swap" icon={ArrowLeftRight} label="Takas Pazarı" />
-          <NavItem to="/messages" icon={MessageCircle} label="Mesajlar" />
           <NavItem to="/profile" icon={User} label="Profil" />
         </nav>
       </div>
