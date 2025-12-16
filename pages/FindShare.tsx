@@ -21,8 +21,15 @@ export const FindShare: React.FC = () => {
     const init = async () => {
         let userId = 'current-user';
         if (isSupabaseConfigured()) {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) userId = user.id;
+            // Hızlıca yerel profili al, bekletme
+            const localUser = ReferralService.getUserProfile();
+            if (localUser && localUser.id !== 'current-user') {
+                userId = localUser.id;
+            } else {
+                // Yerelde yoksa Supabase'e sor
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) userId = user.id;
+            }
         }
 
         // Fetch initial state
@@ -80,12 +87,10 @@ export const FindShare: React.FC = () => {
 
     const interval = setInterval(async () => {
         let userId = 'current-user';
-        if (isSupabaseConfigured()) {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) userId = user.id;
-        } else {
-            return;
-        }
+        const localUser = ReferralService.getUserProfile();
+        userId = localUser.id;
+        
+        if (!isSupabaseConfigured()) return;
         
         // DB check
         const freshTx = await DBService.getActiveTransaction(userId);
@@ -124,31 +129,58 @@ export const FindShare: React.FC = () => {
 
   const handleCreateRequest = async () => {
     setCreating(true);
+    
+    // GÜVENLİK ZAMANLAYICISI: 10 saniye içinde yanıt gelmezse işlemi iptal et
+    const timeoutId = setTimeout(() => {
+        setCreating(false);
+        alert("İstek zaman aşımına uğradı. Lütfen internet bağlantınızı kontrol edin.");
+    }, 10000);
+
     try {
       let userId = 'current-user';
 
       if (isSupabaseConfigured()) {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) {
-             alert("Lütfen önce giriş yapın.");
-             navigate('/login');
-             return;
+          // Önce yerel storage'dan kullanıcıyı al (daha hızlı)
+          const localUser = ReferralService.getUserProfile();
+          if (localUser && localUser.id !== 'current-user') {
+              userId = localUser.id;
+          } else {
+             // Eğer yoksa Supabase'e sor
+             const { data: { user } } = await supabase.auth.getUser();
+             if (!user) {
+                clearTimeout(timeoutId);
+                alert("Lütfen önce giriş yapın.");
+                setCreating(false);
+                navigate('/login');
+                return;
+             }
+             userId = user.id;
           }
-          userId = user.id;
       } else {
-          // Fallback demo user
-          const profile = ReferralService.getUserProfile();
-          userId = profile.id;
+          // Supabase yoksa işlem yapma (Mock veriyi kaldırdık)
+          clearTimeout(timeoutId);
+          alert("Veritabanı bağlantısı yok.");
+          setCreating(false);
+          return;
       }
 
       const val = parseFloat(amount);
       if (isNaN(val) || val < 50 || val > 5000) {
+         clearTimeout(timeoutId);
          alert("Tutar 50 - 5000 TL arasında olmalıdır.");
          setCreating(false);
          return;
       }
 
+      // DB İsteğini yap
       const newTxData = await DBService.createTransactionRequest(userId, val, description);
+      
+      // Veri başarıyla geldiyse zamanlayıcıyı temizle
+      clearTimeout(timeoutId);
+
+      if (!newTxData) {
+          throw new Error("İşlem oluşturulamadı, veri boş döndü.");
+      }
 
       // Local state update for immediate feedback
       const localTx: Transaction = {
@@ -167,10 +199,12 @@ export const FindShare: React.FC = () => {
       setActiveTransaction(localTx);
       setDescription('');
       
-    } catch (error) {
+    } catch (error: any) {
+      clearTimeout(timeoutId);
       console.error(error);
-      alert("Talep oluşturulurken bir hata oluştu.");
+      alert("Talep oluşturulurken bir hata oluştu: " + (error.message || "Bilinmeyen Hata"));
     } finally {
+      // Her durumda loading state'i kapat
       setCreating(false);
     }
   };

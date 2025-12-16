@@ -337,6 +337,7 @@ export const DBService = {
         .single();
         
     if (error) throw error;
+    if (!data) throw new Error("İşlem oluşturuldu ancak veri dönmedi.");
     return data;
   },
 
