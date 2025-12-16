@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
-import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet, Info, Check, MapPin, Clock, Star, ShieldCheck, Lock, Zap, Smartphone } from 'lucide-react';
+import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet, Info, Check, MapPin, Clock, Star, ShieldCheck, Lock, Zap, Smartphone, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TrackerStep, Transaction, TransactionService, calculateTransaction, DBService, formatName } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -46,66 +46,99 @@ export const Supporters: React.FC = () => {
   const filteredListings = listings.filter(l => activeFilter === 'all' || l.type === activeFilter);
 
   useEffect(() => {
+    let mounted = true;
+    const safetyTimer = setTimeout(() => {
+        if (mounted && loading) {
+            setLoading(false);
+            console.warn("Loading timed out - forcing render");
+        }
+    }, 5000); // 5 saniye sonra yüklemeyi zorla kapat
+
     fetchData();
-    // Reduced polling frequency to 15s to avoid main thread violations
-    const interval = setInterval(fetchData, 15000); 
-    return () => clearInterval(interval);
+    
+    // Polling - 15 saniyede bir güncelle
+    const interval = setInterval(() => {
+        if(mounted) fetchData(true); // true = silent update (loading gösterme)
+    }, 15000); 
+
+    return () => {
+        mounted = false;
+        clearTimeout(safetyTimer);
+        clearInterval(interval);
+    };
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (silent = false) => {
     if (!isSupabaseConfigured()) {
        setListings([]);
-       setLoading(false);
+       if (!silent) setLoading(false);
        return;
     }
 
+    if (!silent) setLoading(true);
+
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const currentUser = session?.user;
         
-        // Use the updated service method that fetches from 'transactions' table
+        // Veritabanından veriyi çek
         const pendingData = await DBService.getPendingTransactions();
         
-        const filteredData = user 
-            ? pendingData.filter((item: any) => item.seeker_id !== user.id)
+        // Kendi oluşturduğumuz talepleri listeden çıkar (Seeker bizsek görmeyelim)
+        const filteredData = currentUser 
+            ? pendingData.filter((item: any) => item.seeker_id !== currentUser.id)
             : pendingData;
         
         const mappedListings: UIListing[] = filteredData.map((item: any) => ({
               id: item.id,
-              name: formatName(item.profiles?.full_name),
+              name: formatName(item.profiles?.full_name || 'Kullanıcı'),
               amount: item.amount,
-              location: item.profiles?.location || 'Konum Yok', // If profile doesn't have location
+              location: item.profiles?.location || 'Konum Yok', 
               time: 'Az önce',
               rating: item.profiles?.rating || 5.0,
               avatar: item.profiles?.avatar_url || 'https://picsum.photos/100/100',
               description: item.listing_title || 'Açıklama yok',
               type: 'food' 
         }));
+        
         setListings(mappedListings);
 
-        if (user) {
-           // Includes completed transactions unless dismissed
-           const activeTx = await DBService.getActiveTransaction(user.id);
+        if (currentUser) {
+           // Aktif işlem kontrolü
+           const activeTx = await DBService.getActiveTransaction(currentUser.id);
            
-           if (activeTx && activeTx.supporterId === user.id) {
+           if (activeTx && activeTx.supporterId === currentUser.id) {
                setActiveTransaction(activeTx);
               
-              if (activeTab === 'all' && activeTx.status !== TrackerStep.DISMISSED && activeTx.status !== TrackerStep.CANCELLED) {
+              if (activeTab === 'all' && 
+                  activeTx.status !== TrackerStep.DISMISSED && 
+                  activeTx.status !== TrackerStep.CANCELLED) {
+                  // Eğer aktif bir desteğim varsa otomatik o taba geç
                   setActiveTab('my-support');
               }
            } else {
-              setActiveTransaction(null);
+              // Eğer veritabanından null geldiyse state'i de temizle
+              if (activeTx === null) {
+                  setActiveTransaction(null);
+              }
            }
         }
     } catch (e) {
         console.error("Fetch error", e);
+    } finally {
+        if (!silent) setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleSupportClick = (e: React.MouseEvent, listing: UIListing) => {
     e.stopPropagation();
-    if (activeTransaction && activeTransaction.status !== TrackerStep.COMPLETED && activeTransaction.status !== TrackerStep.DISMISSED && activeTransaction.status !== TrackerStep.CANCELLED && activeTransaction.status !== TrackerStep.FAILED) {
-      alert("Devam eden bir işleminiz var.");
+    if (activeTransaction && 
+        activeTransaction.status !== TrackerStep.COMPLETED && 
+        activeTransaction.status !== TrackerStep.DISMISSED && 
+        activeTransaction.status !== TrackerStep.CANCELLED && 
+        activeTransaction.status !== TrackerStep.FAILED) {
+      
+      alert("Zaten devam eden bir işleminiz var. Lütfen önce onu tamamlayın.");
       setActiveTab('my-support');
       return;
     }
@@ -155,8 +188,9 @@ export const Supporters: React.FC = () => {
         setSelectedListing(null);
 
     } catch (Z: any) {
-        alert("Hata oluştu: " + (Z.message || "Bilinmiyor"));
-        try { fetchData(); } catch (e) {}
+        console.error(Z);
+        alert("İşlem kabul edilirken hata oluştu: " + (Z.message || "Bilinmiyor"));
+        fetchData(); // Refresh to ensure sync
     } finally {
         setIsProcessing(false);
     }
@@ -275,12 +309,21 @@ export const Supporters: React.FC = () => {
 
         {activeTab === 'all' && (
           <>
-            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-               {FILTERS.map(filter => (
-                  <button key={filter.id} onClick={() => setActiveFilter(filter.id)} className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold transition-all border ${activeFilter === filter.id ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-500 border-gray-200'}`}>
-                     {filter.icon} {filter.label}
-                  </button>
-               ))}
+            <div className="flex justify-between items-center">
+                <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
+                {FILTERS.map(filter => (
+                    <button key={filter.id} onClick={() => setActiveFilter(filter.id)} className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold transition-all border ${activeFilter === filter.id ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-500 border-gray-200'}`}>
+                        {filter.icon} {filter.label}
+                    </button>
+                ))}
+                </div>
+                
+                <button 
+                    onClick={() => fetchData(false)}
+                    className="p-2 bg-white rounded-full shadow-sm border border-gray-100 text-slate-900 hover:bg-gray-50"
+                >
+                    <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                </button>
             </div>
 
             <div className="flex flex-col gap-4 max-w-2xl mx-auto">
@@ -367,6 +410,7 @@ export const Supporters: React.FC = () => {
                  </div>
                  <h3 className="text-gray-900 font-bold text-sm mb-1">Henüz destek olmadınız</h3>
                  <p className="text-xs text-gray-400">Listeden bir talep seçerek başlayın.</p>
+                 <button onClick={() => setActiveTab('all')} className="mt-4 text-emerald-600 font-bold text-xs underline">Taleplere Göz At</button>
                </div>
              ) : (
                 <>
@@ -417,6 +461,7 @@ export const Supporters: React.FC = () => {
                                     {activeTransaction.supportPercentage === 20 ? 'Standart Destek (%20)' : 'Altın Kalp Destek (%100)'}
                                 </p>
                             </div>
+                            <button onClick={() => fetchData(true)} className="text-gray-400 hover:text-slate-900"><RefreshCw size={14}/></button>
                         </div>
 
                         <Tracker 
