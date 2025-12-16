@@ -35,8 +35,33 @@ export const Login: React.FC = () => {
       if (authError) throw authError;
 
       if (authData.user) {
-        // Sayfayı yenilemek yerine navigate kullanıyoruz. 
-        // Bu sayede supabase client instance'ı hafızadaki oturumu kaybetmez.
+        // Oturum açıldıktan sonra hemen profili çekmeye çalışalım
+        // Bu adım, App.tsx'in "Loading" ekranında takılmasını önler
+        try {
+            const profile = await DBService.getUserProfile(authData.user.id);
+            
+            if (profile) {
+                ReferralService.saveUserProfile(profile);
+            } else {
+                // Profil henüz yoksa geçici bir profil oluşturup kaydedelim
+                const tempUser: User = {
+                    id: authData.user.id,
+                    name: authData.user.email?.split('@')[0] || 'Kullanıcı',
+                    avatar: 'https://picsum.photos/200',
+                    rating: 0,
+                    location: '',
+                    goldenHearts: 0,
+                    silverHearts: 0,
+                    isAvailable: true,
+                    referralCode: '',
+                    wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
+                };
+                ReferralService.saveUserProfile(tempUser);
+            }
+        } catch (profileError) {
+            console.warn("Profil yüklenemedi, varsayılanlar kullanılıyor.", profileError);
+        }
+
         navigate('/app');
       }
     } catch (err: any) {

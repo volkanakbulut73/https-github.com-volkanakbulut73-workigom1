@@ -29,7 +29,14 @@ export const SwapList: React.FC = () => {
 
       const dataPromise = SwapService.getListings();
       
-      const result = await Promise.race([dataPromise, timeoutPromise]);
+      let result = await Promise.race([dataPromise, timeoutPromise]);
+      
+      // YENİDEN DENEME MEKANİZMASI:
+      // Eğer sonuç boş geldiyse (auth token henüz hazır olmayabilir), 1.5 sn bekleyip tekrar dene.
+      if (!result || result.length === 0) {
+          await new Promise(r => setTimeout(r, 1500));
+          result = await SwapService.getListings();
+      }
       
       if (result && Array.isArray(result)) {
          setListings(result);
@@ -50,8 +57,7 @@ export const SwapList: React.FC = () => {
       
       loadListings();
 
-      // GÜVENLİK ÖNLEMİ: Eğer 5 saniye içinde loading hala true ise (örneğin promise takıldıysa) zorla kapat.
-      // Bu, "yükleniyorda kalıyor" sorununu kesin olarak çözer.
+      // GÜVENLİK ÖNLEMİ: Eğer 5 saniye içinde loading hala true ise zorla kapat.
       const safetyTimer = setTimeout(() => {
         if (mounted) {
             setLoading(false);
