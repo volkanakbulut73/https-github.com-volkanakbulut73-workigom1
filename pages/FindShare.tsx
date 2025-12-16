@@ -30,12 +30,14 @@ export const FindShare: React.FC = () => {
     const init = async () => {
         let userId = 'current-user';
         if (isSupabaseConfigured()) {
-            const localUser = ReferralService.getUserProfile();
-            if (localUser && localUser.id !== 'current-user') {
-                userId = localUser.id;
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                userId = session.user.id;
             } else {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (user) userId = user.id;
+                const localUser = ReferralService.getUserProfile();
+                if (localUser && localUser.id !== 'current-user') {
+                    userId = localUser.id;
+                }
             }
         }
 
@@ -49,7 +51,6 @@ export const FindShare: React.FC = () => {
   }, []);
 
   // 2. Realtime Subscription - Web için en önemli kısım
-  // Veritabanında bir değişiklik olduğunda (örneğin biri talebi kabul ettiğinde) anında tetiklenir.
   useEffect(() => {
     if (!activeTransaction?.id || !isSupabaseConfigured()) return;
 
@@ -102,7 +103,6 @@ export const FindShare: React.FC = () => {
   }, [activeTransaction?.id]); 
 
   // 3. Güvenli Polling (Yedek Mekanizma)
-  // Realtime çalışmazsa veya ağ koparsa diye her 10 saniyede bir kontrol et
   useEffect(() => {
       let isFetching = false;
       const interval = setInterval(async () => {
@@ -113,7 +113,7 @@ export const FindShare: React.FC = () => {
               currentTx.status === TrackerStep.FAILED || 
               currentTx.status === TrackerStep.DISMISSED) return;
 
-          if (isFetching) return; // Önceki istek bitmediyse yenisini atma
+          if (isFetching) return; 
 
           isFetching = true;
           try {
@@ -126,12 +126,12 @@ export const FindShare: React.FC = () => {
           } finally {
               isFetching = false;
           }
-      }, 10000); // 10 saniyede bir
+      }, 10000); 
 
       return () => clearInterval(interval);
   }, []);
 
-  // Timer logic for QR validity
+  // Timer logic
   useEffect(() => {
       if (activeTransaction?.status === TrackerStep.QR_UPLOADED && activeTransaction.qrUploadedAt) {
           const startTime = new Date(activeTransaction.qrUploadedAt).getTime();
@@ -164,44 +164,39 @@ export const FindShare: React.FC = () => {
     if (creating) return; 
     setCreating(true);
     
-    // Güvenlik zamanlayıcısı: 45 saniye sonra hata ver
+    // Güvenlik zamanlayıcısı: 30 saniye
     let isTimedOut = false;
     const timeoutId = setTimeout(() => {
         isTimedOut = true;
         setCreating(false);
         if (activeTxRef.current === null) {
-             alert("İşlem beklenenden uzun sürdü. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.");
+             alert("Bağlantı zaman aşımına uğradı. Lütfen internetinizi kontrol edin.");
         }
-    }, 45000); 
+    }, 30000); 
 
     try {
-      let userId = 'current-user';
-
-      if (isSupabaseConfigured()) {
-          const localUser = ReferralService.getUserProfile();
-          if (localUser && localUser.id !== 'current-user') {
-              userId = localUser.id;
-          } else {
-             const { data: { user } } = await supabase.auth.getUser();
-             if (!user) {
-                if (!isTimedOut) {
-                    clearTimeout(timeoutId);
-                    alert("Lütfen önce giriş yapın.");
-                    setCreating(false);
-                    navigate('/login');
-                }
-                return;
-             }
-             userId = user.id;
-          }
-      } else {
-          if (!isTimedOut) {
-            clearTimeout(timeoutId);
-            alert("Veritabanı bağlantısı yok.");
-            setCreating(false);
-          }
+      if (!isSupabaseConfigured()) {
+          clearTimeout(timeoutId);
+          alert("Veritabanı bağlantısı yapılamadı.");
+          setCreating(false);
           return;
       }
+
+      // KRİTİK DEĞİŞİKLİK: LocalStorage yerine doğrudan oturumdan ID alıyoruz.
+      // RLS politikaları, auth.uid() ile gönderilen seeker_id'nin eşleşmesini zorunlu kılar.
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+         if (!isTimedOut) {
+            clearTimeout(timeoutId);
+            alert("Lütfen önce giriş yapın.");
+            setCreating(false);
+            navigate('/login');
+         }
+         return;
+      }
+
+      const userId = user.id;
 
       const val = parseFloat(amount);
       if (isNaN(val) || val < 50 || val > 5000) {
@@ -220,10 +215,10 @@ export const FindShare: React.FC = () => {
       clearTimeout(timeoutId);
 
       if (!newTxData) {
-          throw new Error("İşlem oluşturulamadı.");
+          throw new Error("İşlem oluşturulamadı. (Veritabanı yanıt vermedi)");
       }
 
-      // Local state update (Hızlı UI tepkisi için)
+      // Local state update
       const localTx: Transaction = {
           id: newTxData.id,
           seekerId: userId,
@@ -243,8 +238,14 @@ export const FindShare: React.FC = () => {
     } catch (error: any) {
       if (!isTimedOut) {
           clearTimeout(timeoutId);
-          console.error(error);
-          alert("Hata: " + (error.message || "Talep oluşturulamadı."));
+          console.error("Create TX Error:", error);
+          
+          let msg = error.message || "Bilinmeyen hata";
+          if (msg.includes("row-level security")) {
+              msg = "Yetki hatası: Lütfen çıkış yapıp tekrar giriş yapın.";
+          }
+          
+          alert("Hata: " + msg);
       }
     } finally {
       if (!isTimedOut) {
