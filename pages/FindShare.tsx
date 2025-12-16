@@ -39,6 +39,7 @@ export const FindShare: React.FC = () => {
             }
         }
 
+        // İlk yüklemede aktif işlem var mı kontrol et
         const initialTx = await DBService.getActiveTransaction(userId);
         if (initialTx) {
             setActiveTransaction(initialTx);
@@ -47,10 +48,12 @@ export const FindShare: React.FC = () => {
     init();
   }, []);
 
-  // 2. Realtime Subscription
+  // 2. Realtime Subscription - Web için en önemli kısım
+  // Veritabanında bir değişiklik olduğunda (örneğin biri talebi kabul ettiğinde) anında tetiklenir.
   useEffect(() => {
     if (!activeTransaction?.id || !isSupabaseConfigured()) return;
 
+    // İşlem bittiyse dinlemeyi bırak
     if (activeTransaction.status === TrackerStep.COMPLETED || 
         activeTransaction.status === TrackerStep.FAILED || 
         activeTransaction.status === TrackerStep.CANCELLED || 
@@ -79,6 +82,7 @@ export const FindShare: React.FC = () => {
                     amounts: calculateTransaction(newData.amount, newData.support_percentage)
                 };
                 
+                // Eğer destekçi atandıysa ismini çek
                 if (newData.supporter_id && !prev.supporterId) {
                      DBService.getUserProfile(newData.supporter_id).then(profile => {
                          if(profile) {
@@ -96,6 +100,36 @@ export const FindShare: React.FC = () => {
         supabase.removeChannel(channel); 
     };
   }, [activeTransaction?.id]); 
+
+  // 3. Güvenli Polling (Yedek Mekanizma)
+  // Realtime çalışmazsa veya ağ koparsa diye her 10 saniyede bir kontrol et
+  useEffect(() => {
+      let isFetching = false;
+      const interval = setInterval(async () => {
+          const currentTx = activeTxRef.current;
+          
+          if (!currentTx || 
+              currentTx.status === TrackerStep.COMPLETED || 
+              currentTx.status === TrackerStep.FAILED || 
+              currentTx.status === TrackerStep.DISMISSED) return;
+
+          if (isFetching) return; // Önceki istek bitmediyse yenisini atma
+
+          isFetching = true;
+          try {
+              const fresh = await DBService.getActiveTransaction(currentTx.seekerId);
+              if (fresh && (fresh.status !== currentTx.status || fresh.supporterId !== currentTx.supporterId)) {
+                  setActiveTransaction(fresh);
+              }
+          } catch (e) {
+              console.warn("Polling error ignored");
+          } finally {
+              isFetching = false;
+          }
+      }, 10000); // 10 saniyede bir
+
+      return () => clearInterval(interval);
+  }, []);
 
   // Timer logic for QR validity
   useEffect(() => {
@@ -130,7 +164,7 @@ export const FindShare: React.FC = () => {
     if (creating) return; 
     setCreating(true);
     
-    // Timeout increased to 45 seconds
+    // Güvenlik zamanlayıcısı: 45 saniye sonra hata ver
     let isTimedOut = false;
     const timeoutId = setTimeout(() => {
         isTimedOut = true;
@@ -189,7 +223,7 @@ export const FindShare: React.FC = () => {
           throw new Error("İşlem oluşturulamadı.");
       }
 
-      // Local state update
+      // Local state update (Hızlı UI tepkisi için)
       const localTx: Transaction = {
           id: newTxData.id,
           seekerId: userId,
