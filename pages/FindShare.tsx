@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Wallet, Clock, Star, Loader2, Info, XCircle, Home, AlertTriangle } from 'lucide-react';
 import { Button } from '../components/Button';
@@ -16,31 +16,20 @@ export const FindShare: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  // State'i anlık takip etmek için ref kullanıyoruz (Render döngüsünü kırmak için)
-  const activeTxRef = useRef<Transaction | null>(null);
-
-  // State her değiştiğinde ref'i güncelle
-  useEffect(() => {
-    activeTxRef.current = activeTransaction;
-  }, [activeTransaction]);
-
   // Initial Load and Realtime Subscription
   useEffect(() => {
     const init = async () => {
         let userId = 'current-user';
         if (isSupabaseConfigured()) {
-            const localUser = ReferralService.getUserProfile();
-            if (localUser && localUser.id !== 'current-user') {
-                userId = localUser.id;
-            } else {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (user) userId = user.id;
-            }
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) userId = user.id;
         }
 
+        // Fetch initial state
         const initialTx = await DBService.getActiveTransaction(userId);
         setActiveTransaction(initialTx);
         
+        // Setup Supabase Realtime Subscription if we have a transaction
         if (initialTx && isSupabaseConfigured()) {
             const channel = supabase.channel(`tx_${initialTx.id}`)
                 .on('postgres_changes', { 
@@ -49,6 +38,7 @@ export const FindShare: React.FC = () => {
                     table: 'transactions',
                     filter: `id=eq.${initialTx.id}`
                 }, (payload) => {
+                    // Map new payload to Transaction interface
                     const newData = payload.new;
                     const updatedTx: Transaction = {
                         ...initialTx,
@@ -58,9 +48,11 @@ export const FindShare: React.FC = () => {
                         qrUrl: newData.qr_url,
                         qrUploadedAt: newData.qr_uploaded_at,
                         completedAt: newData.completed_at,
+                        // Update calculated amounts if needed
                         amounts: calculateTransaction(newData.amount, newData.support_percentage)
                     };
                     
+                    // We might need to fetch profile name if supporter joined
                     if (newData.supporter_id && !initialTx.supporterId) {
                          DBService.getUserProfile(newData.supporter_id).then(profile => {
                              if(profile) updatedTx.supporterName = formatName(profile.name);
@@ -76,46 +68,47 @@ export const FindShare: React.FC = () => {
         }
     };
     init();
-  }, [activeTransaction?.id]); 
+  }, [activeTransaction?.id]); // Re-subscribe if ID changes (e.g. new creation)
 
-  // OPTIMIZED POLLING MECHANISM
-  // Bağımlılık dizisini (dependency array) boş bırakarak sadece mount anında başlatıyoruz.
-  // İçerideki verilere `activeTxRef` üzerinden erişiyoruz. Bu sayede sonsuz loop oluşmuyor.
+  // Polling Mechanism to ensure status updates (Fixes 'not moving to cash payment' issue)
   useEffect(() => {
+    if (!activeTransaction || 
+        activeTransaction.status === TrackerStep.COMPLETED || 
+        activeTransaction.status === TrackerStep.FAILED || 
+        activeTransaction.status === TrackerStep.CANCELLED ||
+        activeTransaction.status === TrackerStep.DISMISSED) return;
+
     const interval = setInterval(async () => {
-        const currentTx = activeTxRef.current;
-
-        // Eğer aktif işlem yoksa veya işlem bitmişse sorgu yapma
-        if (!currentTx || 
-            currentTx.status === TrackerStep.COMPLETED || 
-            currentTx.status === TrackerStep.FAILED || 
-            currentTx.status === TrackerStep.CANCELLED ||
-            currentTx.status === TrackerStep.DISMISSED) return;
-
-        if (!isSupabaseConfigured()) return;
-        
-        let userId = currentTx.seekerId;
-        
-        try {
-            const freshTx = await DBService.getActiveTransaction(userId);
-            
-            if (freshTx) {
-                 // Sadece durum veya destekçi değiştiyse state güncelle (Gereksiz render önleme)
-                 if (freshTx.status !== currentTx.status || freshTx.supporterId !== currentTx.supporterId) {
-                     console.log("Status updated via polling:", freshTx.status);
-                     setActiveTransaction(freshTx);
-                 }
+        let userId = 'current-user';
+        if (isSupabaseConfigured()) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) userId = user.id;
+        } else {
+            // Local mock check
+            const stored = TransactionService.getActive();
+            if (stored && stored.id === activeTransaction.id && stored.status !== activeTransaction.status) {
+                setActiveTransaction(stored);
             }
-        } catch (err) {
-            console.warn("Polling error:", err);
+            return;
         }
-    }, 5000); // 5 saniyede bir kontrol et (Browser'ı yormamak için süreyi artırdık)
+        
+        // DB check
+        const freshTx = await DBService.getActiveTransaction(userId);
+        if (freshTx) {
+             const statusChanged = freshTx.status !== activeTransaction.status;
+             const supporterChanged = freshTx.supporterId !== activeTransaction.supporterId;
+             
+             if (statusChanged || supporterChanged) {
+                 setActiveTransaction(freshTx);
+             }
+        }
+    }, 3000); // Check every 3 seconds
 
     return () => clearInterval(interval);
-  }, []); // Empty dependency array is intentional!
+  }, [activeTransaction]);
 
 
-  // Timer logic for QR validity
+  // Timer logic for QR validity (Mock)
   useEffect(() => {
       if (activeTransaction?.status === TrackerStep.QR_UPLOADED && activeTransaction.qrUploadedAt) {
           const startTime = new Date(activeTransaction.qrUploadedAt).getTime();
@@ -135,61 +128,34 @@ export const FindShare: React.FC = () => {
   };
 
   const handleCreateRequest = async () => {
-    if (creating) return; // Çift tıklamayı önle
     setCreating(true);
-    
-    // GÜVENLİK ZAMANLAYICISI
-    const timeoutId = setTimeout(() => {
-        setCreating(false);
-        // Eğer hala işlem bitmediyse kullanıcıyı uyar ama state'i bozma
-        if (activeTxRef.current === null) {
-             alert("İşlem beklenenden uzun sürdü. Bağlantınızı kontrol edin.");
-        }
-    }, 15000); // 15 saniye
-
     try {
       let userId = 'current-user';
 
       if (isSupabaseConfigured()) {
-          const localUser = ReferralService.getUserProfile();
-          if (localUser && localUser.id !== 'current-user') {
-              userId = localUser.id;
-          } else {
-             const { data: { user } } = await supabase.auth.getUser();
-             if (!user) {
-                clearTimeout(timeoutId);
-                alert("Lütfen önce giriş yapın.");
-                setCreating(false);
-                navigate('/login');
-                return;
-             }
-             userId = user.id;
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+             alert("Lütfen önce giriş yapın.");
+             navigate('/login');
+             return;
           }
+          userId = user.id;
       } else {
-          clearTimeout(timeoutId);
-          alert("Veritabanı bağlantısı yok.");
-          setCreating(false);
-          return;
+          // Fallback demo user
+          const profile = ReferralService.getUserProfile();
+          userId = profile.id;
       }
 
       const val = parseFloat(amount);
       if (isNaN(val) || val < 50 || val > 5000) {
-         clearTimeout(timeoutId);
          alert("Tutar 50 - 5000 TL arasında olmalıdır.");
          setCreating(false);
          return;
       }
 
-      // DB İsteğini yap
       const newTxData = await DBService.createTransactionRequest(userId, val, description);
-      
-      clearTimeout(timeoutId);
 
-      if (!newTxData) {
-          throw new Error("İşlem oluşturulamadı.");
-      }
-
-      // Local state update
+      // Local state update for immediate feedback
       const localTx: Transaction = {
           id: newTxData.id,
           seekerId: userId,
@@ -202,14 +168,13 @@ export const FindShare: React.FC = () => {
           seekerName: 'Ben'
       };
 
-      TransactionService.save(localTx); 
+      TransactionService.save(localTx); // Local backup
       setActiveTransaction(localTx);
       setDescription('');
       
-    } catch (error: any) {
-      clearTimeout(timeoutId);
+    } catch (error) {
       console.error(error);
-      alert("Hata: " + (error.message || "Talep oluşturulamadı."));
+      alert("Talep oluşturulurken bir hata oluştu.");
     } finally {
       setCreating(false);
     }
@@ -223,6 +188,7 @@ export const FindShare: React.FC = () => {
         if (isSupabaseConfigured()) {
             await DBService.markCashPaid(activeTransaction.id);
         }
+        // Optimistic update
         const updated = { ...activeTransaction, status: TrackerStep.CASH_PAID };
         setActiveTransaction(updated);
     } catch (e) {
@@ -270,28 +236,38 @@ export const FindShare: React.FC = () => {
     setLoading(true);
     try {
         if (isSupabaseConfigured()) {
+            // Await the cancellation. If it fails (e.g. 400 error), we catch it below.
             await DBService.cancelTransaction(activeTransaction.id);
         }
+        
+        // Only clear and navigate if successful
         setActiveTransaction(null);
         TransactionService.clearActive();
-        navigate('/app'); 
+        navigate('/app'); // Fixed: Redirect to App Home instead of Landing Page
     } catch (e: any) {
         console.error("Cancel failed", e);
-        alert("İşlem iptal edilirken hata: " + e.message);
+        // Show error message and stay on the page
+        alert("İşlem iptal edilirken bir hata oluştu: " + (e.message || "Bilinmeyen Hata"));
     } finally {
         setLoading(false);
     }
   };
 
   const handleClearActive = async () => {
+    // This is used for Dismissing (Success/Fail screens)
+    // If it was completed/cancelled/failed, we should dismiss it so it doesn't show up again
     if (activeTransaction && isSupabaseConfigured()) {
         try {
             await DBService.dismissTransaction(activeTransaction.id);
-        } catch (e) { console.error(e); }
+        } catch (e) {
+            console.error("Dismiss failed", e);
+            // We continue to clear locally even if DB fails for dismiss, 
+            // as the transaction is likely already in a final state.
+        }
     }
      TransactionService.clearActive();
      setActiveTransaction(null);
-     navigate('/app'); 
+     navigate('/app'); // Fixed: Redirect to App Home instead of Landing Page
   };
 
   if (activeTransaction) {
