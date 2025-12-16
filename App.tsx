@@ -30,7 +30,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   useEffect(() => {
     let mounted = true;
     
-    // Safety timeout: If auth check hangs for 4s, force stop loading.
+    // Safety timeout: Increased to 10s for slow connections
     const safetyTimer = setTimeout(() => {
         if (mounted && isLoading) {
             console.warn("Auth check timed out - forcing state.");
@@ -38,7 +38,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
             const localUser = ReferralService.getUserProfile();
             setIsAuthenticated(localUser.id !== 'current-user');
         }
-    }, 4000);
+    }, 10000);
 
     const initializeAuth = async () => {
       // 1. Optimistic Check: Local Storage
@@ -75,7 +75,6 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
     const handleUserSession = async (user: any) => {
         // 1. Construct temporary profile from Auth User Data (available immediately)
-        // This ensures the user sees their name/avatar instantly without waiting for DB
         const tempUser: User = {
             id: user.id,
             name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Kullanıcı',
@@ -89,7 +88,6 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
             wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
         };
         
-        // Save temp profile to unblock UI with valid-looking data
         ReferralService.saveUserProfile(tempUser);
 
         // 2. Immediate UI unlock - Do not wait for DB

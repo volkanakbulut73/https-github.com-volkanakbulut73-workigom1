@@ -21,46 +21,47 @@ export const Login: React.FC = () => {
 
     // Supabase kontrolü
     if (!isSupabaseConfigured()) {
-       setError("Veritabanı yapılandırması eksik. Lütfen .env dosyasını kontrol edin veya geliştirici ile iletişime geçin.");
+       setError("Veritabanı yapılandırması eksik. Lütfen .env dosyasını kontrol edin.");
        setIsLoading(false);
        return;
     }
 
-    try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    // Zaman aşımı kontrolü için Promise yarışması
+    const loginPromise = supabase.auth.signInWithPassword({
         email,
         password,
-      });
+    });
+
+    const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Bağlantı zaman aşımına uğradı. Lütfen internetinizi kontrol edin.")), 15000)
+    );
+
+    try {
+      // @ts-ignore - Promise race type mismatch ignore
+      const result: any = await Promise.race([loginPromise, timeoutPromise]);
+      const { data: authData, error: authError } = result;
 
       if (authError) throw authError;
 
       if (authData.user) {
-        // Oturum açıldıktan sonra hemen profili çekmeye çalışalım
-        // Bu adım, App.tsx'in "Loading" ekranında takılmasını önler
-        try {
-            const profile = await DBService.getUserProfile(authData.user.id);
-            
-            if (profile) {
-                ReferralService.saveUserProfile(profile);
-            } else {
-                // Profil henüz yoksa geçici bir profil oluşturup kaydedelim
-                const tempUser: User = {
-                    id: authData.user.id,
-                    name: authData.user.email?.split('@')[0] || 'Kullanıcı',
-                    avatar: 'https://picsum.photos/200',
-                    rating: 0,
-                    location: '',
-                    goldenHearts: 0,
-                    silverHearts: 0,
-                    isAvailable: true,
-                    referralCode: '',
-                    wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
-                };
-                ReferralService.saveUserProfile(tempUser);
-            }
-        } catch (profileError) {
-            console.warn("Profil yüklenemedi, varsayılanlar kullanılıyor.", profileError);
-        }
+        // KRİTİK DÜZELTME: Profil çekme işlemini (DBService.getUserProfile) burada yapmıyoruz.
+        // App.tsx zaten oturum açıldığını algılayıp arka planda profili çekecektir.
+        // Burada sadece yönlendirme yaparak kullanıcının takılmasını önlüyoruz.
+        
+        // Geçici olarak kullanıcı varmış gibi davranarak UI'ı rahatlatıyoruz
+        const tempUser: User = {
+            id: authData.user.id,
+            name: authData.user.user_metadata?.full_name || authData.user.email?.split('@')[0] || 'Kullanıcı',
+            avatar: authData.user.user_metadata?.avatar_url || 'https://picsum.photos/200',
+            rating: 0,
+            location: '',
+            goldenHearts: 0,
+            silverHearts: 0,
+            isAvailable: true,
+            referralCode: '',
+            wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
+        };
+        ReferralService.saveUserProfile(tempUser);
 
         navigate('/app');
       }
@@ -68,10 +69,14 @@ export const Login: React.FC = () => {
       console.error("Login Error:", err);
       // Hata mesajını kullanıcıya göster
       let errorMessage = "Giriş başarısız. Bilgilerinizi kontrol edin.";
+      
       if (err.message === "Invalid login credentials") errorMessage = "E-posta veya şifre hatalı.";
       if (err.message.includes("Email not confirmed")) errorMessage = "E-posta adresinizi doğrulamanız gerekiyor.";
+      if (err.message.includes("zaman aşımı")) errorMessage = "Sunucu yanıt vermedi. İnternet bağlantınızı kontrol edin.";
+      if (err.message.includes("fetch")) errorMessage = "İnternet bağlantısı yok.";
       
       setError(errorMessage);
+    } finally {
       setIsLoading(false);
     }
   };
