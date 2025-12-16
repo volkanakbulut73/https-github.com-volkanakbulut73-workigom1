@@ -47,7 +47,8 @@ export const Supporters: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000); 
+    // Reduced polling frequency to 15s to avoid main thread violations
+    const interval = setInterval(fetchData, 15000); 
     return () => clearInterval(interval);
   }, []);
 

@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Wallet, Clock, Star, Loader2, Info, XCircle, Home, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, Wallet, Clock, Star, Loader2, Info, XCircle, Home, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
 import { Transaction, TrackerStep, TransactionService, ReferralService, DBService, calculateTransaction, formatName } from '../types';
@@ -15,100 +15,89 @@ export const FindShare: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Initial Load and Realtime Subscription
+  // State'i anlık takip etmek için ref kullanıyoruz (Render döngüsünü kırmak için)
+  const activeTxRef = useRef<Transaction | null>(null);
+
+  // State her değiştiğinde ref'i güncelle
+  useEffect(() => {
+    activeTxRef.current = activeTransaction;
+  }, [activeTransaction]);
+
+  // 1. Initial Load - Sadece sayfa açıldığında 1 kere çalışır
   useEffect(() => {
     const init = async () => {
         let userId = 'current-user';
         if (isSupabaseConfigured()) {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) userId = user.id;
+            const localUser = ReferralService.getUserProfile();
+            if (localUser && localUser.id !== 'current-user') {
+                userId = localUser.id;
+            } else {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) userId = user.id;
+            }
         }
 
-        // Fetch initial state
         const initialTx = await DBService.getActiveTransaction(userId);
-        setActiveTransaction(initialTx);
-        
-        // Setup Supabase Realtime Subscription if we have a transaction
-        if (initialTx && isSupabaseConfigured()) {
-            const channel = supabase.channel(`tx_${initialTx.id}`)
-                .on('postgres_changes', { 
-                    event: 'UPDATE', 
-                    schema: 'public', 
-                    table: 'transactions',
-                    filter: `id=eq.${initialTx.id}`
-                }, (payload) => {
-                    // Map new payload to Transaction interface
-                    const newData = payload.new;
-                    const updatedTx: Transaction = {
-                        ...initialTx,
-                        status: newData.status,
-                        supporterId: newData.supporter_id,
-                        supportPercentage: newData.support_percentage,
-                        qrUrl: newData.qr_url,
-                        qrUploadedAt: newData.qr_uploaded_at,
-                        completedAt: newData.completed_at,
-                        // Update calculated amounts if needed
-                        amounts: calculateTransaction(newData.amount, newData.support_percentage)
-                    };
-                    
-                    // We might need to fetch profile name if supporter joined
-                    if (newData.supporter_id && !initialTx.supporterId) {
-                         DBService.getUserProfile(newData.supporter_id).then(profile => {
-                             if(profile) updatedTx.supporterName = formatName(profile.name);
-                             setActiveTransaction(updatedTx);
-                         });
-                    } else {
-                        setActiveTransaction(updatedTx);
-                    }
-                })
-                .subscribe();
-
-            return () => { supabase.removeChannel(channel); };
+        if (initialTx) {
+            setActiveTransaction(initialTx);
         }
     };
     init();
-  }, [activeTransaction?.id]); // Re-subscribe if ID changes (e.g. new creation)
+  }, []);
 
-  // Polling Mechanism to ensure status updates (Fixes 'not moving to cash payment' issue)
+  // 2. Realtime Subscription
   useEffect(() => {
-    if (!activeTransaction || 
-        activeTransaction.status === TrackerStep.COMPLETED || 
+    if (!activeTransaction?.id || !isSupabaseConfigured()) return;
+
+    if (activeTransaction.status === TrackerStep.COMPLETED || 
         activeTransaction.status === TrackerStep.FAILED || 
-        activeTransaction.status === TrackerStep.CANCELLED ||
+        activeTransaction.status === TrackerStep.CANCELLED || 
         activeTransaction.status === TrackerStep.DISMISSED) return;
 
-    const interval = setInterval(async () => {
-        let userId = 'current-user';
-        if (isSupabaseConfigured()) {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) userId = user.id;
-        } else {
-            // Local mock check
-            const stored = TransactionService.getActive();
-            if (stored && stored.id === activeTransaction.id && stored.status !== activeTransaction.status) {
-                setActiveTransaction(stored);
-            }
-            return;
-        }
-        
-        // DB check
-        const freshTx = await DBService.getActiveTransaction(userId);
-        if (freshTx) {
-             const statusChanged = freshTx.status !== activeTransaction.status;
-             const supporterChanged = freshTx.supporterId !== activeTransaction.supporterId;
-             
-             if (statusChanged || supporterChanged) {
-                 setActiveTransaction(freshTx);
-             }
-        }
-    }, 3000); // Check every 3 seconds
+    const channel = supabase.channel(`tx_${activeTransaction.id}`)
+        .on('postgres_changes', { 
+            event: 'UPDATE', 
+            schema: 'public', 
+            table: 'transactions',
+            filter: `id=eq.${activeTransaction.id}`
+        }, async (payload) => {
+            const newData = payload.new;
+            
+            setActiveTransaction(prev => {
+                if (!prev) return null;
+                
+                const updatedTx: Transaction = {
+                    ...prev,
+                    status: newData.status,
+                    supporterId: newData.supporter_id,
+                    supportPercentage: newData.support_percentage,
+                    qrUrl: newData.qr_url,
+                    qrUploadedAt: newData.qr_uploaded_at,
+                    completedAt: newData.completed_at,
+                    amounts: calculateTransaction(newData.amount, newData.support_percentage)
+                };
+                
+                if (newData.supporter_id && !prev.supporterId) {
+                     DBService.getUserProfile(newData.supporter_id).then(profile => {
+                         if(profile) {
+                             setActiveTransaction(curr => curr ? { ...curr, supporterName: formatName(profile.name) } : null);
+                         }
+                     });
+                }
+                
+                return updatedTx;
+            });
+        })
+        .subscribe();
 
-    return () => clearInterval(interval);
-  }, [activeTransaction]);
+    return () => { 
+        supabase.removeChannel(channel); 
+    };
+  }, [activeTransaction?.id]); 
 
-
-  // Timer logic for QR validity (Mock)
+  // Timer logic for QR validity
   useEffect(() => {
       if (activeTransaction?.status === TrackerStep.QR_UPLOADED && activeTransaction.qrUploadedAt) {
           const startTime = new Date(activeTransaction.qrUploadedAt).getTime();
@@ -127,35 +116,80 @@ export const FindShare: React.FC = () => {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const handleManualRefresh = async () => {
+      if (!activeTransaction || refreshing) return;
+      setRefreshing(true);
+      try {
+          const fresh = await DBService.getActiveTransaction(activeTransaction.seekerId);
+          if (fresh) setActiveTransaction(fresh);
+      } catch(e) { console.error(e); }
+      finally { setRefreshing(false); }
+  };
+
   const handleCreateRequest = async () => {
+    if (creating) return; 
     setCreating(true);
+    
+    // Timeout increased to 45 seconds
+    let isTimedOut = false;
+    const timeoutId = setTimeout(() => {
+        isTimedOut = true;
+        setCreating(false);
+        if (activeTxRef.current === null) {
+             alert("İşlem beklenenden uzun sürdü. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.");
+        }
+    }, 45000); 
+
     try {
       let userId = 'current-user';
 
       if (isSupabaseConfigured()) {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) {
-             alert("Lütfen önce giriş yapın.");
-             navigate('/login');
-             return;
+          const localUser = ReferralService.getUserProfile();
+          if (localUser && localUser.id !== 'current-user') {
+              userId = localUser.id;
+          } else {
+             const { data: { user } } = await supabase.auth.getUser();
+             if (!user) {
+                if (!isTimedOut) {
+                    clearTimeout(timeoutId);
+                    alert("Lütfen önce giriş yapın.");
+                    setCreating(false);
+                    navigate('/login');
+                }
+                return;
+             }
+             userId = user.id;
           }
-          userId = user.id;
       } else {
-          // Fallback demo user
-          const profile = ReferralService.getUserProfile();
-          userId = profile.id;
+          if (!isTimedOut) {
+            clearTimeout(timeoutId);
+            alert("Veritabanı bağlantısı yok.");
+            setCreating(false);
+          }
+          return;
       }
 
       const val = parseFloat(amount);
       if (isNaN(val) || val < 50 || val > 5000) {
-         alert("Tutar 50 - 5000 TL arasında olmalıdır.");
-         setCreating(false);
+         if (!isTimedOut) {
+            clearTimeout(timeoutId);
+            alert("Tutar 50 - 5000 TL arasında olmalıdır.");
+            setCreating(false);
+         }
          return;
       }
 
+      // DB İsteğini yap
       const newTxData = await DBService.createTransactionRequest(userId, val, description);
+      
+      if (isTimedOut) return;
+      clearTimeout(timeoutId);
 
-      // Local state update for immediate feedback
+      if (!newTxData) {
+          throw new Error("İşlem oluşturulamadı.");
+      }
+
+      // Local state update
       const localTx: Transaction = {
           id: newTxData.id,
           seekerId: userId,
@@ -168,27 +202,30 @@ export const FindShare: React.FC = () => {
           seekerName: 'Ben'
       };
 
-      TransactionService.save(localTx); // Local backup
+      TransactionService.save(localTx); 
       setActiveTransaction(localTx);
       setDescription('');
       
-    } catch (error) {
-      console.error(error);
-      alert("Talep oluşturulurken bir hata oluştu.");
+    } catch (error: any) {
+      if (!isTimedOut) {
+          clearTimeout(timeoutId);
+          console.error(error);
+          alert("Hata: " + (error.message || "Talep oluşturulamadı."));
+      }
     } finally {
-      setCreating(false);
+      if (!isTimedOut) {
+        setCreating(false);
+      }
     }
   };
 
   const handleCashPaid = async () => {
     if (!activeTransaction) return;
-    
     try {
         setLoading(true);
         if (isSupabaseConfigured()) {
             await DBService.markCashPaid(activeTransaction.id);
         }
-        // Optimistic update
         const updated = { ...activeTransaction, status: TrackerStep.CASH_PAID };
         setActiveTransaction(updated);
     } catch (e) {
@@ -201,7 +238,6 @@ export const FindShare: React.FC = () => {
 
   const handlePaymentSuccess = async () => {
     if (!activeTransaction) return;
-    
     if (isSupabaseConfigured()) {
         try {
             await DBService.completeTransaction(activeTransaction.id);
@@ -211,7 +247,6 @@ export const FindShare: React.FC = () => {
             return;
         }
     }
-
     const updated = { ...activeTransaction, status: TrackerStep.COMPLETED, completedAt: new Date().toISOString() };
     setActiveTransaction(updated);
     ReferralService.processReward(updated);
@@ -223,7 +258,6 @@ export const FindShare: React.FC = () => {
       
       const updated = { ...activeTransaction, status: TrackerStep.FAILED };
       setActiveTransaction(updated);
-
       if (isSupabaseConfigured()) {
           await DBService.failTransaction(activeTransaction.id);
       }
@@ -236,38 +270,28 @@ export const FindShare: React.FC = () => {
     setLoading(true);
     try {
         if (isSupabaseConfigured()) {
-            // Await the cancellation. If it fails (e.g. 400 error), we catch it below.
             await DBService.cancelTransaction(activeTransaction.id);
         }
-        
-        // Only clear and navigate if successful
         setActiveTransaction(null);
         TransactionService.clearActive();
-        navigate('/app'); // Fixed: Redirect to App Home instead of Landing Page
+        navigate('/app'); 
     } catch (e: any) {
         console.error("Cancel failed", e);
-        // Show error message and stay on the page
-        alert("İşlem iptal edilirken bir hata oluştu: " + (e.message || "Bilinmeyen Hata"));
+        alert("İşlem iptal edilirken hata: " + e.message);
     } finally {
         setLoading(false);
     }
   };
 
   const handleClearActive = async () => {
-    // This is used for Dismissing (Success/Fail screens)
-    // If it was completed/cancelled/failed, we should dismiss it so it doesn't show up again
     if (activeTransaction && isSupabaseConfigured()) {
         try {
             await DBService.dismissTransaction(activeTransaction.id);
-        } catch (e) {
-            console.error("Dismiss failed", e);
-            // We continue to clear locally even if DB fails for dismiss, 
-            // as the transaction is likely already in a final state.
-        }
+        } catch (e) { console.error(e); }
     }
      TransactionService.clearActive();
      setActiveTransaction(null);
-     navigate('/app'); // Fixed: Redirect to App Home instead of Landing Page
+     navigate('/app'); 
   };
 
   if (activeTransaction) {
@@ -338,6 +362,15 @@ export const FindShare: React.FC = () => {
                                     <h3 className="font-bold text-gray-800 text-sm mb-1">Paylaşım Talebiniz Yayınlandı</h3>
                                     <p className="text-xs text-blue-900 font-bold">Destekçiler talepinizi görüyor.</p>
                                     <p className="text-[10px] text-gray-400 mt-2">Bu ekranı kapatabilirsiniz, bildirim gelecektir.</p>
+
+                                    <button 
+                                        onClick={handleManualRefresh}
+                                        disabled={refreshing}
+                                        className="mt-4 flex items-center gap-2 text-[10px] font-bold text-gray-400 hover:text-slate-900 bg-gray-50 px-3 py-1.5 rounded-full transition-colors"
+                                    >
+                                        <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+                                        Durumu Yenile
+                                    </button>
                                 </div>
                             </div>
                         ) : (
@@ -422,6 +455,13 @@ export const FindShare: React.FC = () => {
                         </div>
                         <p className="text-sm font-bold text-gray-700">{formatName(activeTransaction.supporterName || 'Destekçi')} QR Kodunu Yüklüyor...</p>
                         <p className="text-xs mt-1 text-gray-400">Lütfen bekleyin, bildirim alacaksınız.</p>
+                        <button 
+                            onClick={handleManualRefresh}
+                            disabled={refreshing}
+                            className="mt-4 text-[10px] text-gray-400 hover:text-slate-900 underline"
+                        >
+                            {refreshing ? 'Yenileniyor...' : 'Durumu Yenile'}
+                        </button>
                     </div>
                     )}
 
