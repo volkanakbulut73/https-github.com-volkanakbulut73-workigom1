@@ -84,11 +84,6 @@ export const FindShare: React.FC = () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) userId = user.id;
         } else {
-            // Local mock check
-            const stored = TransactionService.getActive();
-            if (stored && stored.id === activeTransaction.id && stored.status !== activeTransaction.status) {
-                setActiveTransaction(stored);
-            }
             return;
         }
         

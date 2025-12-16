@@ -472,51 +472,11 @@ export const DBService = {
   },
 };
 
-// Mock Data for fallback
-const MOCK_LISTINGS: SwapListing[] = [
-    {
-      id: 'mock-1',
-      title: 'Apple AirPods 3. Nesil',
-      description: 'Sıfır kapalı kutu, Multinet bakiyesi karşılığı.',
-      requiredBalance: 3500,
-      photoUrl: 'https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?w=500&q=80',
-      location: 'İstanbul, Beşiktaş',
-      ownerId: 'mock-user-1',
-      ownerName: 'Berkant A.',
-      ownerAvatar: 'https://picsum.photos/200?random=1',
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 'mock-2',
-      title: 'Samsung Galaxy Watch 5',
-      description: 'Az kullanılmış, temiz. Sodexo ile takas olur.',
-      requiredBalance: 4200,
-      photoUrl: 'https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=500&q=80',
-      location: 'İstanbul, Kadıköy',
-      ownerId: 'mock-user-2',
-      ownerName: 'Selin Y.',
-      ownerAvatar: 'https://picsum.photos/200?random=2',
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 'mock-3',
-      title: 'JBL Flip 6 Hoparlör',
-      description: 'Kutulu faturalı. Ticket Edenred kabul edilir.',
-      requiredBalance: 2800,
-      photoUrl: 'https://images.unsplash.com/photo-1613040809024-b4ef7ba99bc3?w=500&q=80',
-      location: 'Ankara, Çankaya',
-      ownerId: 'mock-user-3',
-      ownerName: 'Mehmet K.',
-      ownerAvatar: 'https://picsum.photos/200?random=3',
-      createdAt: new Date().toISOString()
-    }
-];
-
 export const SwapService = {
   getListings: async (): Promise<SwapListing[]> => {
-    // 1. If not configured, return mock data immediately to prevent "Loading..." hang
+    // 1. If not configured, return empty array immediately (NO MOCK DATA)
     if (!isSupabaseConfigured()) {
-        return MOCK_LISTINGS;
+        return [];
     }
 
     try {
@@ -527,12 +487,10 @@ export const SwapService = {
 
         if (error) {
             console.error("Listings fetch error (Supabase):", error);
-            // Fallback to mock on error (e.g. table doesn't exist yet, or RLS block)
-            return MOCK_LISTINGS;
+            return [];
         }
         
-        // Critical fix: Supabase can return null data on RLS policy mismatch without throwing error
-        if (!data || data.length === 0) return MOCK_LISTINGS; 
+        if (!data || data.length === 0) return []; 
 
         return data.map((item: any) => {
             return {
@@ -550,16 +508,11 @@ export const SwapService = {
         });
     } catch (e) {
         console.error("Swap Service Critical Error:", e);
-        return MOCK_LISTINGS;
+        return [];
     }
   },
 
   getListingById: async (id: string): Promise<SwapListing | null> => {
-     // Handle mock IDs
-     if (id.startsWith('mock-')) {
-         return MOCK_LISTINGS.find(l => l.id === id) || null;
-     }
-
      if (!isSupabaseConfigured()) return null;
 
      try {
@@ -595,22 +548,9 @@ export const SwapService = {
   },
 
   createListing: async (title: string, description: string, price: number, photoUrl: string) => {
-    // Mock Mode
+    // Strict Supabase Check
     if (!isSupabaseConfigured()) {
-        const mockListing = {
-            id: `local-${Date.now()}`,
-            title,
-            description,
-            requiredBalance: price,
-            photoUrl,
-            location: 'İstanbul',
-            ownerId: 'current-user',
-            ownerName: 'Ben',
-            ownerAvatar: 'https://picsum.photos/200',
-            createdAt: new Date().toISOString()
-        };
-        MOCK_LISTINGS.unshift(mockListing);
-        return;
+        throw new Error("Veritabanı bağlantısı bulunamadı. Lütfen Supabase yapılandırmasını kontrol edin.");
     }
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -643,12 +583,7 @@ export const SwapService = {
   },
 
   deleteListing: async (id: string) => {
-      // Handle mock deletion
-      if (id.startsWith('mock-') || id.startsWith('local-')) {
-          const index = MOCK_LISTINGS.findIndex(l => l.id === id);
-          if (index > -1) MOCK_LISTINGS.splice(index, 1);
-          return;
-      }
+      if (!isSupabaseConfigured()) throw new Error("Veritabanı bağlantısı yok");
 
       const { error } = await supabase.from('swap_listings').delete().eq('id', id);
       if (error) throw error;
@@ -656,8 +591,7 @@ export const SwapService = {
 
   uploadImage: async (file: File): Promise<string> => {
       if (!isSupabaseConfigured()) {
-          // Return a fake URL for local testing
-          return await fileToBase64(file);
+           throw new Error("Resim yüklemek için veritabanı bağlantısı gerekli.");
       }
 
       try {

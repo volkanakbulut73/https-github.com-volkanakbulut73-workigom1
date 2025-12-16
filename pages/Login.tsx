@@ -35,9 +35,9 @@ export const Login: React.FC = () => {
       if (authError) throw authError;
 
       if (authData.user) {
-        // Bloklayan veri çekme işlemi kaldırıldı. 
-        // App.tsx zaten oturum açıldığında veriyi arka planda çekecek.
-        window.location.replace('/app');
+        // Sayfayı yenilemek yerine navigate kullanıyoruz. 
+        // Bu sayede supabase client instance'ı hafızadaki oturumu kaybetmez.
+        navigate('/app');
       }
     } catch (err: any) {
       console.error("Login Error:", err);

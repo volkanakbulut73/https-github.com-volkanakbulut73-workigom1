@@ -11,10 +11,8 @@ export const SwapList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'my'>('all');
   
-  // Profil değişimini dinlemek için state kullanıyoruz ancak useEffect'e ID'yi dahil etmeyeceğiz.
   const [currentUser, setCurrentUser] = useState(ReferralService.getUserProfile());
 
-  // Profil güncellemelerini dinle (Sadece filtreleme için, veri çekme için değil)
   useEffect(() => {
     const handleStorage = () => setCurrentUser(ReferralService.getUserProfile());
     window.addEventListener('storage', handleStorage);
@@ -24,18 +22,15 @@ export const SwapList: React.FC = () => {
   const loadListings = async () => {
     setLoading(true);
     try {
-      // 3 Saniye zaman aşımı (Timeout)
+      // 3 Saniye içinde veri gelmezse boş liste döndür (Promise.race için)
       const timeoutPromise = new Promise<SwapListing[]>((resolve) => {
           setTimeout(() => resolve([]), 3000); 
       });
 
       const dataPromise = SwapService.getListings();
       
-      // Veri veya Timeout hangisi önce gelirse
       const result = await Promise.race([dataPromise, timeoutPromise]);
       
-      // Eğer sonuç boş bir dizi ise ve timeout sebebiyle değilse tekrar kontrol edelim
-      // Ancak UI'ın kilitlenmemesi için her durumda state'i güncelliyoruz.
       if (result && Array.isArray(result)) {
          setListings(result);
       } else {
@@ -45,23 +40,35 @@ export const SwapList: React.FC = () => {
       console.error("Listings load error:", e);
       setListings([]);
     } finally {
-      // ÖNEMLİ: Her durumda loading kapanmalı
+      // Normal akışta loading kapat
       setLoading(false);
     }
   };
 
   useEffect(() => { 
-      // currentUser.id bağımlılığını kaldırdık. 
-      // Çünkü veri tabanındaki tüm ilanları çekiyoruz, kişiye özel değil.
-      // Kişiye özel filtreleme client-side (filteredListings) yapılıyor.
+      let mounted = true;
+      
       loadListings();
+
+      // GÜVENLİK ÖNLEMİ: Eğer 5 saniye içinde loading hala true ise (örneğin promise takıldıysa) zorla kapat.
+      // Bu, "yükleniyorda kalıyor" sorununu kesin olarak çözer.
+      const safetyTimer = setTimeout(() => {
+        if (mounted) {
+            setLoading(false);
+        }
+      }, 5000);
+
+      return () => { 
+        mounted = false;
+        clearTimeout(safetyTimer);
+      };
   }, []); 
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
       if (window.confirm('Bu ilanı silmek istediğinize emin misiniz?')) {
           await SwapService.deleteListing(id);
-          loadListings(); // Listeyi yenile
+          loadListings(); 
       }
   };
 
@@ -78,25 +85,19 @@ export const SwapList: React.FC = () => {
 
   const filteredListings = listings.filter(l => {
     if (!l) return false;
-    
-    // Search Filter
     const title = safeStr(l.title).toLowerCase();
     const search = searchTerm.toLowerCase();
     const matchesSearch = title.includes(search);
-
-    // Tab Filter
     const matchesTab = activeTab === 'all' ? true : l.ownerId === currentUser.id;
-
     return matchesSearch && matchesTab;
   });
 
   return (
     <div className="pb-24 min-h-screen bg-gray-50 font-sans">
       
-      {/* HEADER & FILTERS - Masaüstünde ortalanmış ve yuvarlatılmış */}
+      {/* HEADER & FILTERS */}
       <div className="bg-slate-900 pt-10 pb-6 px-4 rounded-b-[2rem] md:rounded-3xl shadow-sm sticky top-0 z-30 md:static md:mb-8 md:mt-4 md:mx-4 lg:mx-auto lg:max-w-6xl">
         
-        {/* Top Bar: Back & Search */}
         <div className="flex items-center gap-3 mb-4 max-w-4xl mx-auto">
            <button 
              onClick={() => navigate(-1)} 
@@ -128,7 +129,6 @@ export const SwapList: React.FC = () => {
         </div>
 
         <div className="max-w-4xl mx-auto space-y-4">
-            {/* TABS */}
             <div className="bg-white/10 p-1 rounded-xl flex gap-1">
                 <button 
                     onClick={() => setActiveTab('all')} 
@@ -144,7 +144,6 @@ export const SwapList: React.FC = () => {
                 </button>
             </div>
 
-            {/* Filter Chips */}
             <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                 <button className="flex items-center gap-1.5 bg-[#FF80AB] text-white px-4 py-2 rounded-xl text-[10px] font-bold shrink-0 shadow-lg shadow-pink-500/20 active:scale-95 transition-transform">
                     <SlidersHorizontal size={12} /> Filtrele

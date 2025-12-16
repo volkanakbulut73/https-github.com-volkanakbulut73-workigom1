@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
@@ -52,19 +53,7 @@ export const Supporters: React.FC = () => {
 
   const fetchData = async () => {
     if (!isSupabaseConfigured()) {
-       setListings(currentListings => {
-           if (currentListings.length === 0) {
-               const mockListings: UIListing[] = [
-                  { id: '1', name: 'Ahmet Y.', amount: 1500, location: 'Kadıköy', time: '2 dk önce', rating: 4.9, avatar: 'https://picsum.photos/100/100?random=1', description: 'Akşam yemeği için paylaşım talebi', type: 'food' },
-                  { id: '2', name: 'Zeynep K.', amount: 1200, location: 'Beşiktaş', time: '12 dk önce', rating: 5.0, avatar: 'https://picsum.photos/101/101?random=2', description: 'Migros alışverişi için paylaşım talebi', type: 'market' },
-               ];
-               return mockListings;
-           }
-           return currentListings;
-       });
-
-       const current = TransactionService.getActive();
-       setActiveTransaction(current || null);
+       setListings([]);
        setLoading(false);
        return;
     }
@@ -129,32 +118,10 @@ export const Supporters: React.FC = () => {
     setIsProcessing(true);
 
     const percentage = selectedPercentage;
-    const calc = calculateTransaction(selectedListing.amount, percentage);
     
-    // Mock local object for immediate UI response
-    const mockTx: Transaction = {
-          id: `tx-${Date.now()}`,
-          seekerId: 'seeker-uuid',
-          supporterId: 'current-user',
-          amount: selectedListing.amount,
-          listingTitle: selectedListing.description,
-          status: TrackerStep.WAITING_CASH_PAYMENT,
-          supportPercentage: percentage,
-          createdAt: new Date().toISOString(),
-          seekerName: selectedListing.name,
-          supporterName: 'Ben',
-          amounts: calc,
-    };
-
     try {
         if (!isSupabaseConfigured()) {
-            TransactionService.save(mockTx);
-            setActiveTransaction(mockTx);
-            setListings(prev => prev.filter(l => l.id !== selectedListing.id));
-            setActiveTab('my-support');
-            setShowSelectionModal(false);
-            setSelectedListing(null);
-            return;
+            throw new Error("Veritabanı bağlantısı yok");
         }
 
         const { data: { user } } = await supabase.auth.getUser();
