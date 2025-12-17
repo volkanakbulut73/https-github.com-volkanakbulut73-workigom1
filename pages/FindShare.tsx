@@ -17,15 +17,14 @@ export const FindShare: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // State'i anlık takip etmek için ref kullanıyoruz (Render döngüsünü kırmak için)
+  // State'i anlık takip etmek için ref kullanıyoruz
   const activeTxRef = useRef<Transaction | null>(null);
 
-  // State her değiştiğinde ref'i güncelle
   useEffect(() => {
     activeTxRef.current = activeTransaction;
   }, [activeTransaction]);
 
-  // 1. Initial Load - Sadece sayfa açıldığında 1 kere çalışır
+  // 1. Initial Load
   useEffect(() => {
     const init = async () => {
         let userId = 'current-user';
@@ -41,7 +40,6 @@ export const FindShare: React.FC = () => {
             }
         }
 
-        // İlk yüklemede aktif işlem var mı kontrol et
         const initialTx = await DBService.getActiveTransaction(userId);
         if (initialTx) {
             setActiveTransaction(initialTx);
@@ -50,11 +48,10 @@ export const FindShare: React.FC = () => {
     init();
   }, []);
 
-  // 2. Realtime Subscription - Web için en önemli kısım
+  // 2. Realtime Subscription
   useEffect(() => {
     if (!activeTransaction?.id || !isSupabaseConfigured()) return;
 
-    // İşlem bittiyse dinlemeyi bırak
     if (activeTransaction.status === TrackerStep.COMPLETED || 
         activeTransaction.status === TrackerStep.FAILED || 
         activeTransaction.status === TrackerStep.CANCELLED || 
@@ -83,7 +80,6 @@ export const FindShare: React.FC = () => {
                     amounts: calculateTransaction(newData.amount, newData.support_percentage)
                 };
                 
-                // Eğer destekçi atandıysa ismini çek
                 if (newData.supporter_id && !prev.supporterId) {
                      DBService.getUserProfile(newData.supporter_id).then(profile => {
                          if(profile) {
@@ -102,7 +98,7 @@ export const FindShare: React.FC = () => {
     };
   }, [activeTransaction?.id]); 
 
-  // 3. Güvenli Polling (Yedek Mekanizma)
+  // 3. Güvenli Polling
   useEffect(() => {
       let isFetching = false;
       const interval = setInterval(async () => {
@@ -163,62 +159,50 @@ export const FindShare: React.FC = () => {
   const handleCreateRequest = async () => {
     if (creating) return; 
     setCreating(true);
-    
-    // Güvenlik zamanlayıcısı: 30 saniye
-    let isTimedOut = false;
-    const timeoutId = setTimeout(() => {
-        isTimedOut = true;
-        setCreating(false);
-        if (activeTxRef.current === null) {
-             alert("Bağlantı zaman aşımına uğradı. Lütfen internetinizi kontrol edin.");
-        }
-    }, 30000); 
 
     try {
+      // 1. Config Check
       if (!isSupabaseConfigured()) {
-          clearTimeout(timeoutId);
-          alert("Veritabanı bağlantısı yapılamadı.");
-          setCreating(false);
-          return;
+          throw new Error("Veritabanı bağlantısı yapılamadı. (Supabase Config Eksik)");
       }
 
-      // KRİTİK DEĞİŞİKLİK: LocalStorage yerine doğrudan oturumdan ID alıyoruz.
-      // RLS politikaları, auth.uid() ile gönderilen seeker_id'nin eşleşmesini zorunlu kılar.
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      // 2. Auth Check with Timeout
+      const authPromise = supabase.auth.getUser();
+      const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Bağlantı zaman aşımı (Auth). İnternet bağlantınızı kontrol edin.")), 10000)
+      );
+      
+      // @ts-ignore
+      const { data: { user }, error: authError } = await Promise.race([authPromise, timeoutPromise]);
 
       if (authError || !user) {
-         if (!isTimedOut) {
-            clearTimeout(timeoutId);
-            alert("Lütfen önce giriş yapın.");
-            setCreating(false);
-            navigate('/login');
-         }
+         alert("Lütfen önce giriş yapın.");
+         navigate('/login');
          return;
       }
 
       const userId = user.id;
-
       const val = parseFloat(amount);
+      
+      // 3. Validation
       if (isNaN(val) || val < 50 || val > 5000) {
-         if (!isTimedOut) {
-            clearTimeout(timeoutId);
-            alert("Tutar 50 - 5000 TL arasında olmalıdır.");
-            setCreating(false);
-         }
-         return;
+         throw new Error("Tutar 50 - 5000 TL arasında olmalıdır.");
       }
 
-      // DB İsteğini yap
-      const newTxData = await DBService.createTransactionRequest(userId, val, description);
-      
-      if (isTimedOut) return;
-      clearTimeout(timeoutId);
+      // 4. DB Request with Timeout
+      const dbPromise = DBService.createTransactionRequest(userId, val, description);
+      const dbTimeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("İşlem oluşturulurken sunucu yanıt vermedi. Lütfen tekrar deneyin.")), 15000)
+      );
+
+      // @ts-ignore
+      const newTxData = await Promise.race([dbPromise, dbTimeoutPromise]);
 
       if (!newTxData) {
-          throw new Error("İşlem oluşturulamadı. (Veritabanı yanıt vermedi)");
+          throw new Error("Veri oluşturulamadı.");
       }
 
-      // Local state update
+      // 5. Success State Update
       const localTx: Transaction = {
           id: newTxData.id,
           seekerId: userId,
@@ -236,21 +220,15 @@ export const FindShare: React.FC = () => {
       setDescription('');
       
     } catch (error: any) {
-      if (!isTimedOut) {
-          clearTimeout(timeoutId);
-          console.error("Create TX Error:", error);
-          
-          let msg = error.message || "Bilinmeyen hata";
-          if (msg.includes("row-level security")) {
-              msg = "Yetki hatası: Lütfen çıkış yapıp tekrar giriş yapın.";
-          }
-          
-          alert("Hata: " + msg);
+      console.error("Create TX Error:", error);
+      let msg = error.message || "Bir hata oluştu.";
+      if (msg.includes("row-level security")) {
+          msg = "Yetki hatası: İşlem yapmaya izniniz yok veya oturumunuz kapanmış. Lütfen çıkış yapıp tekrar girin.";
       }
+      alert("Hata: " + msg);
     } finally {
-      if (!isTimedOut) {
-        setCreating(false);
-      }
+      // Her durumda spinner'ı durdur
+      setCreating(false);
     }
   };
 

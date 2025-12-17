@@ -1,4 +1,5 @@
 
+
 // ... existing imports
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
@@ -336,7 +337,10 @@ export const DBService = {
         .select()
         .single();
         
-    if (error) throw error;
+    if (error) {
+        console.error("Supabase Create Tx Error:", error);
+        throw error;
+    }
     if (!data) throw new Error("İşlem oluşturuldu ancak veri dönmedi.");
     return data;
   },
