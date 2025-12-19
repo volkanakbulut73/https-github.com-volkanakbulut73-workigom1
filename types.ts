@@ -101,7 +101,7 @@ export interface RewardLog {
 // --- Helpers ---
 
 export const formatName = (fullName: string): string => {
-  if (!fullName) return '';
+  if (!fullName) return 'Anonim';
   const parts = fullName.trim().split(' ');
   if (parts.length === 1) return parts[0];
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
@@ -141,13 +141,6 @@ export const calculateTransaction = (amount: number, percentage: 20 | 100) => {
   };
 };
 
-// URL Sanitization Helpers
-const sanitizePhotoUrl = (url: string | null | undefined): string => {
-    if (!url) return 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60';
-    if (url.startsWith('blob:')) return 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60';
-    return url;
-};
-
 const sanitizeAvatarUrl = (url: string | null | undefined): string => {
     if (!url) return 'https://picsum.photos/200';
     if (url.startsWith('blob:')) return 'https://picsum.photos/200';
@@ -156,36 +149,40 @@ const sanitizeAvatarUrl = (url: string | null | undefined): string => {
 
 // --- Services ---
 
-const DEFAULT_USER: User = {
-  id: 'current-user',
-  name: 'Kullanıcı',
-  avatar: 'https://picsum.photos/200',
-  rating: 0,
-  location: '',
-  goldenHearts: 0,
-  silverHearts: 0,
-  isAvailable: false,
-  referralCode: '',
-  wallet: {
-    balance: 0,
-    totalEarnings: 0,
-    pendingBalance: 0
-  }
-};
-
 export const ReferralService = {
   getUserProfile: (): User => {
     try {
       const stored = localStorage.getItem('user_profile');
       if (stored) {
           const user = JSON.parse(stored);
-          // Sanitize avatar in case local storage has a blob url
           user.avatar = sanitizeAvatarUrl(user.avatar);
           return user;
       }
-      return DEFAULT_USER;
+      return {
+        id: 'current-user',
+        name: 'Misafir',
+        avatar: 'https://picsum.photos/200',
+        rating: 0,
+        location: '',
+        goldenHearts: 0,
+        silverHearts: 0,
+        isAvailable: false,
+        referralCode: '',
+        wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
+      };
     } catch {
-      return DEFAULT_USER;
+      return {
+        id: 'current-user',
+        name: 'Misafir',
+        avatar: 'https://picsum.photos/200',
+        rating: 0,
+        location: '',
+        goldenHearts: 0,
+        silverHearts: 0,
+        isAvailable: false,
+        referralCode: '',
+        wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
+      };
     }
   },
   saveUserProfile: (user: User) => {
@@ -197,18 +194,12 @@ export const ReferralService = {
     localStorage.removeItem('active_tx'); 
     window.dispatchEvent(new Event('storage'));
   },
-  processReward: (tx: Transaction) => {
-     // Backend rewards logic
-  },
-  getLogs: (): RewardLog[] => {
-      return [];
-  }
+  processReward: (tx: Transaction) => {},
+  getLogs: (): RewardLog[] => []
 };
 
 export const TransactionService = {
-  getHistory: (): Transaction[] => {
-    return [];
-  },
+  getHistory: (): Transaction[] => [],
   getActive: (): Transaction | null => {
     try {
       const stored = localStorage.getItem('active_tx');
@@ -228,43 +219,30 @@ export const TransactionService = {
 export const DBService = {
   getUserProfile: async (id: string): Promise<User | null> => {
     try {
-        const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
-        
-        if (error) { 
-            if (error.code !== 'PGRST116') {
-                console.warn("Profile fetch error:", error);
+        const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+        if (error || !data) return null;
+        return {
+            id: data.id,
+            name: data.full_name,
+            avatar: sanitizeAvatarUrl(data.avatar_url),
+            rating: data.rating || 5.0,
+            location: data.location || 'İstanbul',
+            goldenHearts: data.golden_hearts || 0,
+            silverHearts: data.silver_hearts || 0,
+            isAvailable: true,
+            referralCode: data.referral_code || 'REF',
+            wallet: {
+              balance: data.wallet_balance || 0,
+              totalEarnings: data.total_earnings || 0,
+              pendingBalance: 0
             }
-            return null;
-        }
-        
-        if (data) {
-            return {
-                id: data.id,
-                name: data.full_name,
-                avatar: sanitizeAvatarUrl(data.avatar_url),
-                rating: data.rating || 5.0,
-                location: data.location || 'İstanbul',
-                goldenHearts: data.golden_hearts || 0,
-                silverHearts: data.silver_hearts || 0,
-                isAvailable: true,
-                referralCode: data.referral_code || 'REF',
-                wallet: {
-                  balance: data.wallet_balance || 0,
-                  totalEarnings: data.total_earnings || 0,
-                  pendingBalance: 0
-                }
-            };
-        }
-    } catch (e) {
-        console.error("Critical Profile Error:", e);
-    }
-    return null;
+        };
+    } catch { return null; }
   },
 
   upsertProfile: async (user: User) => {
       if (!isSupabaseConfigured()) return;
-      
-      const { error } = await supabase.from('profiles').upsert({
+      await supabase.from('profiles').upsert({
           id: user.id,
           full_name: user.name,
           avatar_url: user.avatar,
@@ -275,11 +253,7 @@ export const DBService = {
           referral_code: user.referralCode,
           wallet_balance: user.wallet.balance,
           total_earnings: user.wallet.totalEarnings
-      }, { onConflict: 'id' });
-
-      if (error) {
-          console.error("Upsert profile error:", error);
-      }
+      });
   },
 
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
@@ -287,41 +261,33 @@ export const DBService = {
     try {
         const { data, error } = await supabase
             .from('transactions')
-            .select(`*, seeker:seeker_id(full_name), supporter:supporter_id(full_name)`)
+            .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
             .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
             .neq('status', 'dismissed')
             .neq('status', 'cancelled')
             .order('created_at', { ascending: false })
             .limit(1)
-            .maybeSingle(); // Use maybeSingle to avoid 406/PGRST116 errors in console
+            .maybeSingle();
 
-        if (error) { 
-             console.error("Get Active Tx Error:", error);
-             return null;
-        }
+        if (error || !data) return null;
 
-        if (data) {
-            return {
-                id: data.id,
-                seekerId: data.seeker_id,
-                supporterId: data.supporter_id,
-                amount: data.amount,
-                listingTitle: data.listing_title,
-                status: data.status,
-                supportPercentage: data.support_percentage,
-                qrUrl: data.qr_url,
-                createdAt: data.created_at,
-                qrUploadedAt: data.qr_uploaded_at,
-                completedAt: data.completed_at,
-                seekerName: formatName(data.seeker?.full_name),
-                supporterName: data.supporter ? formatName(data.supporter.full_name) : undefined,
-                amounts: calculateTransaction(data.amount, data.support_percentage)
-            };
-        }
-    } catch (e) {
-        console.error("Get Active Tx Error", e);
-    }
-    return null;
+        return {
+            id: data.id,
+            seekerId: data.seeker_id,
+            supporterId: data.supporter_id,
+            amount: data.amount,
+            listingTitle: data.listing_title,
+            status: data.status,
+            supportPercentage: data.support_percentage,
+            qrUrl: data.qr_url,
+            createdAt: data.created_at,
+            qrUploadedAt: data.qr_uploaded_at,
+            completedAt: data.completed_at,
+            seekerName: formatName(data.seeker?.full_name),
+            supporterName: data.supporter ? formatName(data.supporter.full_name) : undefined,
+            amounts: calculateTransaction(data.amount, data.support_percentage)
+        };
+    } catch { return null; }
   },
 
   createTransactionRequest: async (userId: string, amount: number, description: string) => {
@@ -337,281 +303,182 @@ export const DBService = {
         .select()
         .single();
         
-    if (error) {
-        console.error("Supabase Create Tx Error:", error);
-        throw error;
-    }
-    if (!data) throw new Error("İşlem oluşturuldu ancak veri dönmedi.");
+    if (error) throw error;
     return data;
   },
 
   getPendingTransactions: async (): Promise<any[]> => { 
+    if (!isSupabaseConfigured()) return [];
     try {
-        const { data, error } = await supabase
+        // Fallback mekanizması: Önce join ile dene
+        const { data: joinData, error: joinError } = await supabase
             .from('transactions')
-            .select(`*, profiles:seeker_id(full_name, avatar_url, rating)`)
+            .select(`*, seeker:profiles!seeker_id(full_name, avatar_url, rating, location)`)
             .eq('status', 'waiting-supporter')
             .order('created_at', { ascending: false });
         
-        if (error) throw error;
-        
-        // Map and sanitize avatars
-        return (data || []).map((item: any) => {
-            if (item.profiles) {
-                item.profiles.avatar_url = sanitizeAvatarUrl(item.profiles.avatar_url);
-            }
-            return item;
-        });
+        if (!joinError && joinData) {
+            return joinData;
+        }
+
+        // Join hatası (schema mismatch) durumunda düz veri çek
+        console.warn("Join failed in getPendingTransactions, using basic fetch fallback.");
+        const { data: basicData, error: basicError } = await supabase
+            .from('transactions')
+            .select(`*`)
+            .eq('status', 'waiting-supporter')
+            .order('created_at', { ascending: false });
+
+        if (basicError) throw basicError;
+        return basicData || [];
     } catch (e) {
-        console.error("Pending transactions error:", e);
+        console.error("DB Pending Tx Error:", e);
         return [];
     }
   },
 
   acceptTransaction: async (txId: string, supporterId: string, percentage: number) => {
-    if (isUUID(txId)) {
-        const { data, error } = await supabase
-            .from('transactions')
-            .update({
-                supporter_id: supporterId,
-                status: 'waiting-cash-payment',
-                support_percentage: percentage
-            })
-            .eq('id', txId)
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
-    }
-    throw new Error("Geçersiz işlem ID");
+    const { data, error } = await supabase
+        .from('transactions')
+        .update({
+            supporter_id: supporterId,
+            status: 'waiting-cash-payment',
+            support_percentage: percentage
+        })
+        .eq('id', txId)
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
   },
 
   markCashPaid: async (txId: string) => {
-      const { error } = await supabase.from('transactions').update({ status: 'cash-paid' }).eq('id', txId);
-      if (error) throw error;
+      await supabase.from('transactions').update({ status: 'cash-paid' }).eq('id', txId);
   },
 
   submitQR: async (txId: string, url: string) => {
-      const { error } = await supabase.from('transactions')
+      await supabase.from('transactions')
           .update({ status: 'qr-uploaded', qr_url: url, qr_uploaded_at: new Date().toISOString() }).eq('id', txId);
-      if (error) throw error;
   },
 
   completeTransaction: async (txId: string) => {
-      const { error } = await supabase.from('transactions')
+      await supabase.from('transactions')
           .update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', txId);
-      if (error) throw error;
   },
 
   failTransaction: async (txId: string) => {
-      const { error } = await supabase.from('transactions').update({ status: 'failed' }).eq('id', txId);
-      if (error) throw error;
+      await supabase.from('transactions').update({ status: 'failed' }).eq('id', txId);
   },
 
   cancelTransaction: async (txId: string) => {
-      const { error } = await supabase.from('transactions').delete().eq('id', txId);
-      if (error) throw error;
+      await supabase.from('transactions').delete().eq('id', txId);
   },
 
   withdrawSupport: async (txId: string) => {
-      const { error } = await supabase.from('transactions')
+      await supabase.from('transactions')
           .update({ status: 'waiting-supporter', supporter_id: null, support_percentage: 20 }).eq('id', txId);
-      if (error) throw error;
   },
 
   dismissTransaction: async (txId: string) => {
-      const { error } = await supabase.from('transactions').update({ status: 'dismissed' }).eq('id', txId);
-      if (error) throw error;
+      await supabase.from('transactions').update({ status: 'dismissed' }).eq('id', txId);
       TransactionService.clearActive();
   },
 
-  // --- Storage ---
   uploadQR: async (file: File): Promise<string> => { 
-      try {
-          const fileExt = file.name.split('.').pop();
-          const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-          const filePath = `${fileName}`;
-
-          const { error: uploadError } = await supabase.storage.from('qr-codes').upload(filePath, file);
-
-          if (uploadError) throw uploadError;
-
-          const { data: { publicUrl } } = supabase.storage.from('qr-codes').getPublicUrl(filePath);
-          return publicUrl;
-      } catch (error) {
-          console.error("Supabase Storage error (QR):", error);
-          throw error; 
-      }
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage.from('qr-codes').upload(fileName, file);
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from('qr-codes').getPublicUrl(fileName);
+      return publicUrl;
   },
 
-  // --- Profile Updates ---
   updateUserProfile: async (id: string, data: Partial<User>) => {
     const updates: any = {};
     if (data.name) updates.full_name = data.name;
     if (data.location) updates.location = data.location;
     if (data.avatar) updates.avatar_url = data.avatar;
-    
-    const { error } = await supabase.from('profiles').update(updates).eq('id', id);
-    if (error) throw error;
-    
-    // Update local cache
-    const current = ReferralService.getUserProfile();
-    ReferralService.saveUserProfile({ ...current, ...data });
+    await supabase.from('profiles').update(updates).eq('id', id);
   },
 
   uploadAvatar: async (file: File) => { 
-      try {
-          const fileExt = file.name.split('.').pop();
-          const fileName = `avatars/${Math.random().toString(36).substring(2)}.${fileExt}`;
-          
-          const { error } = await supabase.storage.from('images').upload(fileName, file);
-          
-          if (error) throw error;
-          
-          const { data } = supabase.storage.from('images').getPublicUrl(fileName);
-          return data.publicUrl;
-      } catch (e) {
-          console.error("Resim yükleme hatası (Supabase):", e);
-          throw e;
-      }
+      const fileExt = file.name.split('.').pop();
+      const fileName = `avatars/${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const { error } = await supabase.storage.from('images').upload(fileName, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+      return data.publicUrl;
   },
 };
 
 export const SwapService = {
   getListings: async (): Promise<SwapListing[]> => {
-    // 1. If not configured, return empty array immediately (NO MOCK DATA)
-    if (!isSupabaseConfigured()) {
-        return [];
-    }
-
+    if (!isSupabaseConfigured()) return [];
     try {
         const { data, error } = await supabase
             .from('swap_listings')
             .select('*')
             .order('created_at', { ascending: false });
-
-        if (error) {
-            console.error("Listings fetch error (Supabase):", error);
-            return [];
-        }
-        
-        if (!data || data.length === 0) return []; 
-
-        return data.map((item: any) => {
-            return {
-              id: item.id,
-              title: item.title,
-              description: item.description,
-              requiredBalance: item.required_balance,
-              photoUrl: sanitizePhotoUrl(item.photo_url),
-              location: item.location || 'İstanbul',
-              ownerId: item.owner_id,
-              ownerName: item.owner_name || 'Kullanıcı',
-              ownerAvatar: sanitizeAvatarUrl(item.owner_avatar),
-              createdAt: item.created_at
-            };
-        });
-    } catch (e) {
-        console.error("Swap Service Critical Error:", e);
-        return [];
-    }
+        if (error) return [];
+        return (data || []).map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          requiredBalance: item.required_balance,
+          photoUrl: item.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
+          location: item.location || 'İstanbul',
+          ownerId: item.owner_id,
+          ownerName: item.owner_name || 'Kullanıcı',
+          ownerAvatar: sanitizeAvatarUrl(item.owner_avatar),
+          createdAt: item.created_at
+        }));
+    } catch { return []; }
   },
 
   getListingById: async (id: string): Promise<SwapListing | null> => {
      if (!isSupabaseConfigured()) return null;
-
-     try {
-         const { data, error } = await supabase
-             .from('swap_listings')
-             .select('*')
-             .eq('id', id)
-             .single();
-         
-         if (error) {
-             console.error("Swap item detail error:", error);
-             return null;
-         }
-
-         if (data) {
-             return {
-                id: data.id,
-                title: data.title,
-                description: data.description,
-                requiredBalance: data.required_balance,
-                photoUrl: sanitizePhotoUrl(data.photo_url),
-                location: data.location || 'İstanbul',
-                ownerId: data.owner_id,
-                ownerName: data.owner_name || 'Kullanıcı',
-                ownerAvatar: sanitizeAvatarUrl(data.owner_avatar),
-                createdAt: data.created_at
-             };
-         }
-     } catch (e) {
-         console.error(e);
-     }
-     return null;
+     const { data, error } = await supabase.from('swap_listings').select('*').eq('id', id).maybeSingle();
+     if (error || !data) return null;
+     return {
+        id: data.id,
+        title: data.title,
+        description: data.description,
+        requiredBalance: data.required_balance,
+        photoUrl: data.photo_url || 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500&q=60',
+        location: data.location || 'İstanbul',
+        ownerId: data.owner_id,
+        ownerName: data.owner_name || 'Kullanıcı',
+        ownerAvatar: sanitizeAvatarUrl(data.owner_avatar),
+        createdAt: data.created_at
+     };
   },
 
   createListing: async (title: string, description: string, price: number, photoUrl: string) => {
-    // Strict Supabase Check
-    if (!isSupabaseConfigured()) {
-        throw new Error("Veritabanı bağlantısı bulunamadı. Lütfen Supabase yapılandırmasını kontrol edin.");
-    }
-
+    if (!isSupabaseConfigured()) return;
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Oturum açmanız gerekiyor.");
-
-    let userName = user.user_metadata.full_name || 'Kullanıcı';
-    let userAvatar = user.user_metadata.avatar_url || 'https://picsum.photos/200';
-
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-    if(profile) {
-        userName = profile.full_name;
-        userAvatar = profile.avatar_url;
-    }
-
-    const { error } = await supabase.from('swap_listings').insert({
+    if (!user) throw new Error("Oturum gerekli");
+    await supabase.from('swap_listings').insert({
         owner_id: user.id,
         title,
         description,
         required_balance: price,
         photo_url: photoUrl,
-        owner_name: userName,
-        owner_avatar: userAvatar,
+        owner_name: user.user_metadata.full_name || 'Kullanıcı',
+        owner_avatar: user.user_metadata.avatar_url || 'https://picsum.photos/200',
         location: 'İstanbul'
     });
-    
-    if (error) {
-        console.error("Create Listing Error:", error);
-        throw error;
-    }
   },
 
   deleteListing: async (id: string) => {
-      if (!isSupabaseConfigured()) throw new Error("Veritabanı bağlantısı yok");
-
-      const { error } = await supabase.from('swap_listings').delete().eq('id', id);
-      if (error) throw error;
+      await supabase.from('swap_listings').delete().eq('id', id);
   },
 
   uploadImage: async (file: File): Promise<string> => {
-      if (!isSupabaseConfigured()) {
-           throw new Error("Resim yüklemek için veritabanı bağlantısı gerekli.");
-      }
-
-      try {
-          const fileExt = file.name.split('.').pop();
-          const fileName = `swap/${Math.random().toString(36).substring(2)}.${fileExt}`;
-          
-          const { error } = await supabase.storage.from('images').upload(fileName, file);
-          
-          if (error) throw error;
-          
-          const { data } = supabase.storage.from('images').getPublicUrl(fileName);
-          return data.publicUrl;
-      } catch (e) {
-          console.error("Resim yükleme hatası:", e);
-          throw e;
-      }
+      const fileExt = file.name.split('.').pop();
+      const fileName = `swap/${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const { error } = await supabase.storage.from('images').upload(fileName, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+      return data.publicUrl;
   }
 };
