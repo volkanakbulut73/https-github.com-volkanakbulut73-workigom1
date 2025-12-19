@@ -27,7 +27,6 @@ export interface User {
   };
 }
 
-// Added Voucher interface
 export interface Voucher {
   id: string;
   company: VoucherCompany;
@@ -40,7 +39,6 @@ export interface Voucher {
   createdAt: string;
 }
 
-// Added RewardLog interface
 export interface RewardLog {
   id: string;
   amount: number;
@@ -48,7 +46,6 @@ export interface RewardLog {
   createdAt: string;
 }
 
-// Added SwapListing interface
 export interface SwapListing {
   id: string;
   title: string;
@@ -110,7 +107,6 @@ export const calculateTransaction = (amount: number, percentage: 20 | 100) => {
   };
 };
 
-// Added fileToBase64 helper
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -136,7 +132,6 @@ export const ReferralService = {
     localStorage.clear();
     window.dispatchEvent(new Event('storage'));
   },
-  // Added getLogs method
   getLogs: (): RewardLog[] => {
     try {
       const stored = localStorage.getItem('reward_logs');
@@ -155,7 +150,8 @@ export const DBService = {
     if (!isSupabaseConfigured() || !id) return null;
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
-      if (error || !data) return null;
+      if (error) throw error;
+      if (!data) return null;
       return {
         id: data.id,
         name: data.full_name,
@@ -175,8 +171,9 @@ export const DBService = {
   },
 
   createTransactionRequest: async (userId: string, amount: number, description: string) => {
-    if (!isSupabaseConfigured()) throw new Error("Ağ bağlantısı kurulamadı.");
+    if (!isSupabaseConfigured()) throw new Error("Bağlantı yok.");
     try {
+      // 406 Hatalarını önlemek için insert ve select ayrıştırıldı
       const { data, error } = await supabase.from('transactions').insert({
         seeker_id: userId,
         amount,
@@ -184,11 +181,12 @@ export const DBService = {
         status: TrackerStep.WAITING_SUPPORTER,
         support_percentage: 20
       }).select().single();
+      
       if (error) throw error;
       return data;
     } catch (e: any) {
       console.error("DB Error (CreateTX):", e);
-      throw new Error(e.message || "Sunucu yanıt vermedi. Lütfen tekrar deneyin.");
+      throw e;
     }
   },
 
@@ -198,8 +196,7 @@ export const DBService = {
       const { data, error } = await supabase.from('transactions')
         .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
         .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
-        .neq('status', 'dismissed')
-        .neq('status', 'cancelled')
+        .not('status', 'in', '("dismissed","cancelled","completed","failed")')
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
 
       if (error || !data) return null;
@@ -220,7 +217,6 @@ export const DBService = {
     } catch { return null; }
   },
 
-  // Added getPendingTransactions method
   getPendingTransactions: async () => {
     if (!isSupabaseConfigured()) return [];
     try {
@@ -233,45 +229,57 @@ export const DBService = {
     } catch { return []; }
   },
 
-  // Added acceptTransaction method
   acceptTransaction: async (txId: string, supporterId: string, percentage: 20 | 100) => {
     if (!isSupabaseConfigured()) throw new Error("Ağ hatası");
-    const { data, error } = await supabase.from('transactions')
+    
+    // CRITICAL: Supabase 406 hatasını önlemek için update ve select işlemlerini AYIRDIK.
+    // Önce güncelleme yapıyoruz
+    const { error: updateError } = await supabase.from('transactions')
       .update({ 
         supporter_id: supporterId, 
         status: TrackerStep.WAITING_CASH_PAYMENT,
         support_percentage: percentage
       })
+      .eq('id', txId);
+      
+    if (updateError) {
+        console.error("Update error (406 check):", updateError);
+        throw updateError;
+    }
+
+    // Güncelleme başarılıysa veriyi ayrıca çekiyoruz
+    const { data, error: selectError } = await supabase.from('transactions')
+      .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
       .eq('id', txId)
-      .select().single();
-    if (error) throw error;
+      .single();
+      
+    if (selectError) throw selectError;
     return data;
   },
 
-  // Added uploadQR method
   uploadQR: async (_file: File): Promise<string> => {
+    // Gelecekte gerçek depolama için burası güncellenebilir
     return "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=example-qr-code";
   },
 
-  // Added submitQR method
   submitQR: async (txId: string, qrUrl: string) => {
     if (!isSupabaseConfigured()) return;
-    await supabase.from('transactions').update({ 
+    const { error } = await supabase.from('transactions').update({ 
       status: TrackerStep.QR_UPLOADED, 
       qr_url: qrUrl 
     }).eq('id', txId);
+    if (error) throw error;
   },
 
-  // Added withdrawSupport method
   withdrawSupport: async (txId: string) => {
     if (!isSupabaseConfigured()) return;
-    await supabase.from('transactions').update({ 
+    const { error } = await supabase.from('transactions').update({ 
       status: TrackerStep.WAITING_SUPPORTER, 
       supporter_id: null 
     }).eq('id', txId);
+    if (error) throw error;
   },
 
-  // Added dismissTransaction method
   dismissTransaction: async (txId: string) => {
     if (!isSupabaseConfigured()) return;
     await supabase.from('transactions').update({ status: TrackerStep.DISMISSED }).eq('id', txId);
@@ -279,25 +287,29 @@ export const DBService = {
 
   markCashPaid: async (txId: string) => {
     if (!isSupabaseConfigured()) return;
-    await supabase.from('transactions').update({ status: TrackerStep.CASH_PAID }).eq('id', txId);
+    const { error } = await supabase.from('transactions').update({ status: TrackerStep.CASH_PAID }).eq('id', txId);
+    if (error) throw error;
   },
 
   completeTransaction: async (txId: string) => {
     if (!isSupabaseConfigured()) return;
-    await supabase.from('transactions').update({ status: TrackerStep.COMPLETED, completed_at: new Date().toISOString() }).eq('id', txId);
+    const { error } = await supabase.from('transactions').update({ 
+      status: TrackerStep.COMPLETED, 
+      completed_at: new Date().toISOString() 
+    }).eq('id', txId);
+    if (error) throw error;
   },
 
   cancelTransaction: async (txId: string) => {
     if (!isSupabaseConfigured()) return;
-    await supabase.from('transactions').delete().eq('id', txId);
+    const { error } = await supabase.from('transactions').delete().eq('id', txId);
+    if (error) throw error;
   },
 
-  // Added uploadAvatar method
   uploadAvatar: async (_file: File): Promise<string> => {
     return "https://picsum.photos/200";
   },
 
-  // Added updateUserProfile method
   updateUserProfile: async (id: string, updates: { name: string, location: string, avatar: string }) => {
     if (!isSupabaseConfigured()) return;
     const { error } = await supabase.from('profiles').update({
@@ -307,7 +319,6 @@ export const DBService = {
     }).eq('id', id);
     if (error) throw error;
     
-    // Sync with local storage
     const current = ReferralService.getUserProfile();
     if (current && current.id === id) {
       ReferralService.saveUserProfile({ ...current, name: updates.name, location: updates.location, avatar: updates.avatar });
@@ -315,7 +326,6 @@ export const DBService = {
   }
 };
 
-// Added SwapService
 export const SwapService = {
   getListings: async (): Promise<SwapListing[]> => {
     if (!isSupabaseConfigured()) return [];
@@ -338,20 +348,22 @@ export const SwapService = {
   },
   getListingById: async (id: string): Promise<SwapListing | null> => {
     if (!isSupabaseConfigured()) return null;
-    const { data, error } = await supabase.from('swap_listings').select('*').eq('id', id).maybeSingle();
-    if (error || !data) return null;
-    return {
-      id: data.id,
-      title: data.title,
-      description: data.description,
-      requiredBalance: data.required_balance,
-      photoUrl: data.photo_url,
-      ownerId: data.owner_id,
-      ownerName: data.owner_name,
-      ownerAvatar: data.owner_avatar,
-      location: data.location,
-      createdAt: data.created_at
-    };
+    try {
+      const { data, error } = await supabase.from('swap_listings').select('*').eq('id', id).maybeSingle();
+      if (error || !data) return null;
+      return {
+        id: data.id,
+        title: data.title,
+        description: data.description,
+        requiredBalance: data.required_balance,
+        photoUrl: data.photo_url,
+        ownerId: data.owner_id,
+        ownerName: data.owner_name,
+        ownerAvatar: data.owner_avatar,
+        location: data.location,
+        createdAt: data.created_at
+      };
+    } catch { return null; }
   },
   createListing: async (title: string, description: string, price: number, photoUrl: string) => {
     if (!isSupabaseConfigured()) return;
@@ -371,7 +383,8 @@ export const SwapService = {
   },
   deleteListing: async (id: string) => {
     if (!isSupabaseConfigured()) return;
-    await supabase.from('swap_listings').delete().eq('id', id);
+    const { error } = await supabase.from('swap_listings').delete().eq('id', id);
+    if (error) throw error;
   },
   uploadImage: async (_file: File): Promise<string> => {
     return "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500";

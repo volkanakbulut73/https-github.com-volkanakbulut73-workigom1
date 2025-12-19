@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
-import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet, Info, Check, MapPin, Clock, Star, ShieldCheck, Lock, Zap, Smartphone, RefreshCw } from 'lucide-react';
+import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet, Info, Check, MapPin, Clock, Star, ShieldCheck, Lock, Zap, Smartphone, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TrackerStep, Transaction, TransactionService, calculateTransaction, DBService, formatName } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -40,10 +40,9 @@ export const Supporters: React.FC = () => {
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [qrUploading, setQrUploading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const filteredListings = listings.filter(l => activeFilter === 'all' || l.type === activeFilter);
 
   useEffect(() => {
     let mounted = true;
@@ -80,7 +79,6 @@ export const Supporters: React.FC = () => {
         const rawData = await DBService.getPendingTransactions();
         
         const mappedListings: UIListing[] = rawData.map((item: any) => {
-            // Join verisi (profiles) veya direkt item üzerindeki veriyi kontrol et
             const profile = item.profiles || item.seeker || {};
             const isOwn = currentUser && item.seeker_id === currentUser.id;
 
@@ -98,7 +96,6 @@ export const Supporters: React.FC = () => {
             };
         });
         
-        // Sadece başkalarının taleplerini göster (Kullanıcı test için kendi talebini de görebilsin diye bir uyarı ekleyeceğiz)
         setListings(mappedListings);
 
         if (currentUser) {
@@ -121,6 +118,7 @@ export const Supporters: React.FC = () => {
 
   const handleSupportClick = (e: React.MouseEvent, listing: UIListing) => {
     e.stopPropagation();
+    setErrorMsg(null);
     if (listing.isOwn) {
         alert("Kendi talebinize destek olamazsınız.");
         return;
@@ -131,7 +129,7 @@ export const Supporters: React.FC = () => {
         activeTransaction.status !== TrackerStep.CANCELLED && 
         activeTransaction.status !== TrackerStep.FAILED) {
       
-      alert("Devam eden bir işleminiz var.");
+      alert("Zaten devam eden bir işleminiz var. Lütfen önce onu tamamlayın.");
       setActiveTab('my-support');
       return;
     }
@@ -143,6 +141,7 @@ export const Supporters: React.FC = () => {
   const handleConfirmSupport = async () => {
     if (!selectedListing || isProcessing) return;
     setIsProcessing(true);
+    setErrorMsg(null);
 
     try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -150,6 +149,8 @@ export const Supporters: React.FC = () => {
 
         const updated = await DBService.acceptTransaction(selectedListing.id, user.id, selectedPercentage);
         
+        if (!updated) throw new Error("İşlem verisi alınamadı.");
+
         const realTx: Transaction = {
           id: updated.id,
           seekerId: updated.seeker_id,
@@ -168,7 +169,14 @@ export const Supporters: React.FC = () => {
         setActiveTab('my-support');
         setShowSelectionModal(false);
     } catch (err: any) {
-        alert("Hata: " + (err.message || "İşlem kabul edilemedi."));
+        console.error("Support acceptance error:", err);
+        let msg = "İşlem kabul edilemedi. Lütfen bağlantınızı kontrol edin.";
+        if (err.message && err.message.includes("406")) {
+            msg = "Sunucu yetkilendirme hatası (406). Lütfen sayfayı yenileyip tekrar deneyin.";
+        } else if (err.message) {
+            msg = err.message;
+        }
+        setErrorMsg(msg);
     } finally {
         setIsProcessing(false);
     }
@@ -199,9 +207,14 @@ export const Supporters: React.FC = () => {
   };
 
   const handleDismissTransaction = async () => {
-     if (activeTransaction) await DBService.dismissTransaction(activeTransaction.id);
-     setActiveTransaction(null);
-     setActiveTab('all');
+     try {
+         if (activeTransaction) await DBService.dismissTransaction(activeTransaction.id);
+         setActiveTransaction(null);
+         setActiveTab('all');
+         fetchData();
+     } catch (e) {
+         setActiveTransaction(null);
+     }
   };
 
   return (
@@ -213,7 +226,7 @@ export const Supporters: React.FC = () => {
       </div>
 
       <div className="px-4 -mt-6 relative z-20 space-y-4">
-        <div className="bg-white p-1 rounded-xl flex gap-1 border border-gray-200 shadow-sm max-w-sm mx-auto">
+        <div className="bg-white p-1 rounded-xl flex gap-1 border border-gray-100 shadow-sm max-w-sm mx-auto">
             <button onClick={() => setActiveTab('all')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'all' ? 'bg-slate-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
               Talepler
             </button>
@@ -232,7 +245,7 @@ export const Supporters: React.FC = () => {
                     </button>
                 ))}
                 </div>
-                <button onClick={() => fetchData(false)} className="p-2 bg-white rounded-full shadow-sm text-slate-900">
+                <button onClick={() => fetchData(false)} className="p-2 bg-white rounded-full shadow-sm text-slate-900 active:scale-90 transition-transform">
                     <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
                 </button>
             </div>
@@ -240,23 +253,23 @@ export const Supporters: React.FC = () => {
             <div className="flex flex-col gap-4 max-w-2xl mx-auto">
               {loading ? (
                  <div className="text-center py-20 text-gray-400">
-                    <Loader2 size={32} className="animate-spin mx-auto mb-3" />
+                    <Loader2 size={32} className="animate-spin mx-auto mb-3 text-slate-300" />
                     <p className="text-xs font-bold">Veriler Getiriliyor...</p>
                  </div>
               ) : listings.filter(l => !l.isOwn).length === 0 ? (
-                 <div className="text-center py-16 px-6 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
+                 <div className="text-center py-16 px-6 bg-white rounded-[2rem] border border-gray-100 shadow-sm animate-fade-in">
                     <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
                         <ShoppingBag size={32} className="text-gray-300"/>
                     </div>
                     <p className="text-sm font-bold text-gray-800">Şu an aktif talep bulunmuyor.</p>
-                    <p className="text-xs text-gray-400 mt-1">Sizin oluşturduğunuz talepler bu listede görünmez.</p>
-                    <button onClick={() => fetchData(false)} className="mt-4 text-slate-900 text-xs font-bold underline flex items-center justify-center gap-1 mx-auto">
+                    <p className="text-xs text-gray-400 mt-1 px-4">Yeni talepler geldiğinde liste otomatik olarak güncellenecektir.</p>
+                    <button onClick={() => fetchData(false)} className="mt-6 px-6 py-2 bg-slate-100 rounded-full text-slate-900 text-xs font-bold flex items-center justify-center gap-2 mx-auto hover:bg-slate-200 transition-colors">
                         <RefreshCw size={12}/> Listeyi Yenile
                     </button>
                  </div>
               ) : (
                  listings.filter(l => !l.isOwn && (activeFilter === 'all' || l.type === activeFilter)).map((listing) => (
-                   <div key={listing.id} onClick={(e) => handleSupportClick(e, listing)} className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm hover:border-emerald-200 transition-all cursor-pointer group relative overflow-hidden">
+                   <div key={listing.id} onClick={(e) => handleSupportClick(e, listing)} className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm hover:border-emerald-200 transition-all cursor-pointer group relative overflow-hidden animate-fade-in">
                      <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center gap-3">
                             <img src={listing.avatar} className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm" alt="User" />
@@ -269,19 +282,19 @@ export const Supporters: React.FC = () => {
                         </div>
                         <div className="text-right">
                              <div className="text-xl font-black text-slate-900">{listing.amount}₺</div>
-                             <div className="text-[9px] font-bold text-gray-400 uppercase">Menü Tutarı</div>
+                             <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Tutar</div>
                         </div>
                      </div>
 
-                     <p className="text-slate-600 text-xs mb-6 line-clamp-2 italic">"{listing.description}"</p>
+                     <p className="text-slate-600 text-xs mb-6 line-clamp-2 italic leading-relaxed">"{listing.description}"</p>
 
                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-gray-50 p-3 rounded-xl">
-                            <p className="text-[9px] font-bold text-gray-400 uppercase">Alacağın Nakit</p>
+                        <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Alacağın Nakit</p>
                             <p className="text-sm font-black text-emerald-600">₺{(listing.amount * 0.75).toFixed(0)}</p>
                         </div>
-                        <div className="bg-emerald-500 text-white p-3 rounded-xl flex items-center justify-center gap-2 font-bold text-xs shadow-lg shadow-emerald-200">
-                            Paylaş & Kazan <ArrowRight size={14} />
+                        <div className="bg-slate-900 text-white p-3 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs shadow-lg shadow-slate-900/10 group-hover:bg-slate-800 transition-colors">
+                            Destek Ol <ArrowRight size={14} />
                         </div>
                      </div>
                    </div>
@@ -294,21 +307,23 @@ export const Supporters: React.FC = () => {
         {activeTab === 'my-support' && (
           <div className="animate-fade-in max-w-md mx-auto">
              {!activeTransaction ? (
-               <div className="text-center py-12 bg-white rounded-3xl border border-gray-100">
+               <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 shadow-sm">
                  <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
                      <Heart size={32} className="text-gray-300"/>
                  </div>
-                 <h3 className="text-gray-900 font-bold text-sm mb-1">Henüz destek olmadınız</h3>
-                 <button onClick={() => setActiveTab('all')} className="mt-4 text-emerald-600 font-bold text-xs underline">Taleplere Göz At</button>
+                 <h3 className="text-gray-900 font-bold text-sm mb-1">Aktif desteğiniz yok</h3>
+                 <button onClick={() => setActiveTab('all')} className="mt-4 px-6 py-2 bg-emerald-500 text-white rounded-full font-bold text-xs shadow-lg shadow-emerald-500/20">Talepleri İncele</button>
                </div>
              ) : (
-                <div className="bg-white rounded-[2rem] p-5 shadow-sm border-l-4 border-slate-900 space-y-4">
-                    <div className="flex justify-between items-start">
+                <div className="bg-white rounded-[2rem] p-6 shadow-sm border-2 border-slate-900/5 space-y-4">
+                    <div className="flex justify-between items-start mb-2">
                         <div>
-                            <h3 className="font-bold text-gray-800 text-sm">Destek: {activeTransaction.seekerName}</h3>
-                            <p className="text-[10px] text-gray-500">İşlem ID: {activeTransaction.id.slice(0,8)}</p>
+                            <h3 className="font-bold text-slate-900 text-sm">Destek: {activeTransaction.seekerName}</h3>
+                            <p className="text-[10px] text-gray-400 font-medium">İşlem #{activeTransaction.id.slice(0,8).toUpperCase()}</p>
                         </div>
-                        <button onClick={() => fetchData(true)} className="text-gray-400 hover:text-slate-900"><RefreshCw size={14} className={loading ? 'animate-spin' : ''}/></button>
+                        <button onClick={() => fetchData(true)} className="p-2 bg-gray-50 rounded-full text-slate-400 hover:text-slate-900 transition-colors">
+                            <RefreshCw size={14} className={loading ? 'animate-spin' : ''}/>
+                        </button>
                     </div>
 
                     <Tracker 
@@ -321,25 +336,33 @@ export const Supporters: React.FC = () => {
                         ]} 
                     />
 
-                    <div className="pt-2 border-t border-gray-50">
+                    <div className="pt-4 border-t border-gray-50">
                         {activeTransaction.status === TrackerStep.CASH_PAID && (
-                            <div className="space-y-3">
-                                <div className="bg-green-50 p-3 rounded-xl flex items-center gap-2">
-                                    <CheckCircle2 size={16} className="text-green-500 shrink-0"/>
-                                    <p className="text-[10px] font-bold text-green-700">Alıcı ödeme yaptı! QR yükleyebilirsin.</p>
+                            <div className="space-y-3 animate-fade-in">
+                                <div className="bg-blue-50 p-4 rounded-2xl flex items-start gap-3 border border-blue-100">
+                                    <CheckCircle2 size={18} className="text-blue-500 shrink-0 mt-0.5"/>
+                                    <p className="text-[10px] font-bold text-blue-700 leading-relaxed">Alıcı ödemeyi yaptığını bildirdi! Lütfen yemek kartı QR/PIN kodunuzu yükleyerek işlemi sürdürün.</p>
                                 </div>
                                 <input type="file" ref={fileInputRef} onChange={handleQRUpload} className="hidden" accept="image/*" />
-                                <Button fullWidth className="text-xs py-3" onClick={() => fileInputRef.current?.click()} disabled={qrUploading}>
-                                    {qrUploading ? <Loader2 size={16} className="animate-spin"/> : 'QR Kodunu Yükle'}
+                                <Button fullWidth className="py-4 shadow-lg shadow-slate-900/10" onClick={() => fileInputRef.current?.click()} disabled={qrUploading}>
+                                    {qrUploading ? <Loader2 size={18} className="animate-spin"/> : <><QrCode size={18}/> QR Kodunu Paylaş</>}
                                 </Button>
                             </div>
                         )}
                         {activeTransaction.status === TrackerStep.COMPLETED && (
-                             <Button fullWidth onClick={handleDismissTransaction} className="bg-emerald-500">İşlemi Kapat</Button>
+                             <div className="animate-fade-in text-center space-y-4">
+                                <div className="p-4 bg-emerald-50 rounded-2xl text-emerald-700 text-xs font-bold border border-emerald-100">
+                                    İşlem başarıyla tamamlandı! Teşekkürler.
+                                </div>
+                                <Button fullWidth onClick={handleDismissTransaction} className="bg-emerald-500 py-4">İşlemi Kapat</Button>
+                             </div>
                         )}
-                        <div className="mt-4 text-center">
-                            <button onClick={handleCancelTransaction} className="text-red-400 text-[10px] font-bold">İptal Et</button>
-                        </div>
+                        
+                        {(activeTransaction.status !== TrackerStep.COMPLETED && activeTransaction.status !== TrackerStep.QR_UPLOADED) && (
+                            <div className="mt-4 text-center">
+                                <button onClick={handleCancelTransaction} className="text-red-400 text-[10px] font-bold hover:underline px-4 py-2">Desteği Geri Çek</button>
+                            </div>
+                        )}
                     </div>
                 </div>
              )}
@@ -348,23 +371,33 @@ export const Supporters: React.FC = () => {
       </div>
 
       {showSelectionModal && selectedListing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl relative animate-fade-in">
-            <button onClick={() => !isProcessing && setShowSelectionModal(false)} className="absolute top-5 right-5 text-gray-400" disabled={isProcessing}><X size={20} /></button>
-            <h3 className="text-lg font-black text-slate-900 mb-6">Paylaşım Oranı</h3>
-            <div className="space-y-4">
-                <div onClick={() => !isProcessing && setSelectedPercentage(20)} className={`p-4 rounded-2xl border cursor-pointer transition-all ${selectedPercentage === 20 ? 'border-slate-900 bg-slate-50' : 'border-gray-100'}`}>
-                    <div className="flex justify-between font-bold text-sm mb-1"><span>%20 Paylaşım</span><span>₺{(selectedListing.amount * 0.2).toFixed(0)}</span></div>
-                    <p className="text-[10px] text-gray-500">Standart yardımlaşma oranı.</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl relative">
+            <button onClick={() => !isProcessing && setShowSelectionModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-slate-900 transition-colors" disabled={isProcessing}><X size={24} /></button>
+            <h3 className="text-xl font-black text-slate-900 mb-6 tracking-tight">Destek Oranı Seçin</h3>
+            
+            {errorMsg && (
+                <div className="bg-red-50 text-red-600 p-4 rounded-2xl text-[10px] font-bold mb-4 flex items-center gap-2 border border-red-100">
+                    <AlertTriangle size={14} className="shrink-0"/> {errorMsg}
                 </div>
-                <div onClick={() => !isProcessing && setSelectedPercentage(100)} className={`p-4 rounded-2xl border cursor-pointer transition-all ${selectedPercentage === 100 ? 'border-pink-500 bg-pink-50' : 'border-gray-100'}`}>
-                    <div className="flex justify-between font-bold text-sm mb-1 text-pink-600"><span>%100 Buda Benden</span><span>₺{selectedListing.amount}</span></div>
-                    <p className="text-[10px] text-pink-400">Yemek bedelinin tamamını üstlen.</p>
+            )}
+
+            <div className="space-y-4">
+                <div onClick={() => !isProcessing && setSelectedPercentage(20)} className={`p-5 rounded-2xl border-2 transition-all cursor-pointer ${selectedPercentage === 20 ? 'border-slate-900 bg-slate-50' : 'border-gray-50 bg-gray-50/50 hover:bg-gray-50'}`}>
+                    <div className="flex justify-between font-black text-sm mb-1 text-slate-900"><span>%20 Paylaşım</span><span>₺{(selectedListing.amount * 0.2).toFixed(0)}</span></div>
+                    <p className="text-[10px] text-gray-500 font-medium leading-relaxed">Bakiyenizin %20'si ile destek olun, nakit tasarrufu sağlayın.</p>
+                </div>
+                <div onClick={() => !isProcessing && setSelectedPercentage(100)} className={`p-5 rounded-2xl border-2 transition-all cursor-pointer ${selectedPercentage === 100 ? 'border-pink-500 bg-pink-50' : 'border-gray-50 bg-gray-50/50 hover:bg-gray-50'}`}>
+                    <div className="flex justify-between font-black text-sm mb-1 text-pink-600"><span>%100 Buda Benden</span><span>₺{selectedListing.amount}</span></div>
+                    <p className="text-[10px] text-pink-500 font-medium leading-relaxed">Hesabın tamamını siz üstlenin, toplulukta "Altın Kalp" kazanın.</p>
                 </div>
             </div>
-            <div className="mt-8 flex gap-3">
-                <Button fullWidth variant="secondary" onClick={() => setShowSelectionModal(false)} disabled={isProcessing}>Vazgeç</Button>
-                <Button fullWidth onClick={handleConfirmSupport} disabled={isProcessing}>{isProcessing ? <Loader2 className="animate-spin" /> : 'Onayla'}</Button>
+            
+            <div className="mt-10 flex gap-3">
+                <Button fullWidth variant="secondary" className="py-4" onClick={() => setShowSelectionModal(false)} disabled={isProcessing}>Vazgeç</Button>
+                <Button fullWidth onClick={handleConfirmSupport} disabled={isProcessing} className="py-4 shadow-xl shadow-slate-900/10">
+                    {isProcessing ? <Loader2 className="animate-spin" /> : 'Devam Et'}
+                </Button>
             </div>
           </div>
         </div>
