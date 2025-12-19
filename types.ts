@@ -209,6 +209,7 @@ export const TransactionService = {
 export const DBService = {
   getUserProfile: async (id: string): Promise<User | null> => {
     if (!id || id === 'guest') return null;
+    if (!isSupabaseConfigured()) return null;
     try {
         const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
         if (error || !data) return null;
@@ -233,18 +234,20 @@ export const DBService = {
 
   upsertProfile: async (user: User) => {
       if (!isSupabaseConfigured() || user.id === 'guest') return;
-      await supabase.from('profiles').upsert({
-          id: user.id,
-          full_name: user.name,
-          avatar_url: user.avatar,
-          rating: user.rating,
-          location: user.location,
-          golden_hearts: user.goldenHearts,
-          silver_hearts: user.silverHearts,
-          referral_code: user.referralCode,
-          wallet_balance: user.wallet.balance,
-          total_earnings: user.wallet.totalEarnings
-      });
+      try {
+          await supabase.from('profiles').upsert({
+              id: user.id,
+              full_name: user.name,
+              avatar_url: user.avatar,
+              rating: user.rating,
+              location: user.location,
+              golden_hearts: user.goldenHearts,
+              silver_hearts: user.silverHearts,
+              referral_code: user.referralCode,
+              wallet_balance: user.wallet.balance,
+              total_earnings: user.wallet.totalEarnings
+          });
+      } catch (e) { console.error("Profile upsert failed", e); }
   },
 
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
@@ -282,7 +285,9 @@ export const DBService = {
   },
 
   createTransactionRequest: async (userId: string, amount: number, description: string) => {
-     const { data, error } = await supabase
+    if (!isSupabaseConfigured()) throw new Error("Veritabanı bağlantısı yok.");
+
+    const { data, error } = await supabase
         .from('transactions')
         .insert({
             seeker_id: userId,
@@ -307,16 +312,7 @@ export const DBService = {
             .eq('status', 'waiting-supporter')
             .order('created_at', { ascending: false });
 
-        if (error) {
-            const { data: basicData, error: basicError } = await supabase
-                .from('transactions')
-                .select('*')
-                .eq('status', 'waiting-supporter')
-                .order('created_at', { ascending: false });
-            
-            if (basicError) throw basicError;
-            return basicData || [];
-        }
+        if (error) throw error;
         return data || [];
     } catch (e) {
         return [];
@@ -324,6 +320,7 @@ export const DBService = {
   },
 
   acceptTransaction: async (txId: string, supporterId: string, percentage: number) => {
+    if (!isSupabaseConfigured()) throw new Error("Ağ bağlantısı yok.");
     const { data, error } = await supabase
         .from('transactions')
         .update({
@@ -339,38 +336,49 @@ export const DBService = {
   },
 
   markCashPaid: async (txId: string) => {
+      if (!isSupabaseConfigured()) return;
       await supabase.from('transactions').update({ status: 'cash-paid' }).eq('id', txId);
   },
 
   submitQR: async (txId: string, url: string) => {
+      if (!isSupabaseConfigured()) return;
       await supabase.from('transactions')
           .update({ status: 'qr-uploaded', qr_url: url, qr_uploaded_at: new Date().toISOString() }).eq('id', txId);
   },
 
   completeTransaction: async (txId: string) => {
+      if (!isSupabaseConfigured()) return;
       await supabase.from('transactions')
           .update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', txId);
   },
 
   failTransaction: async (txId: string) => {
+      if (!isSupabaseConfigured()) return;
       await supabase.from('transactions').update({ status: 'failed' }).eq('id', txId);
   },
 
   cancelTransaction: async (txId: string) => {
+      if (!isSupabaseConfigured()) return;
       await supabase.from('transactions').delete().eq('id', txId);
   },
 
   withdrawSupport: async (txId: string) => {
+      if (!isSupabaseConfigured()) return;
       await supabase.from('transactions')
           .update({ status: 'waiting-supporter', supporter_id: null, support_percentage: 20 }).eq('id', txId);
   },
 
   dismissTransaction: async (txId: string) => {
+      if (!isSupabaseConfigured()) {
+          TransactionService.clearActive();
+          return;
+      }
       await supabase.from('transactions').update({ status: 'dismissed' }).eq('id', txId);
       TransactionService.clearActive();
   },
 
   uploadQR: async (file: File): Promise<string> => { 
+      if (!isSupabaseConfigured()) throw new Error("Ağ hatası.");
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
       const { error: uploadError } = await supabase.storage.from('qr-codes').upload(fileName, file);
@@ -380,6 +388,7 @@ export const DBService = {
   },
 
   updateUserProfile: async (id: string, data: Partial<User>) => {
+    if (!isSupabaseConfigured() || id === 'guest') return;
     const updates: any = {};
     if (data.name) updates.full_name = data.name;
     if (data.location) updates.location = data.location;
@@ -388,6 +397,7 @@ export const DBService = {
   },
 
   uploadAvatar: async (file: File) => { 
+      if (!isSupabaseConfigured()) throw new Error("Ağ hatası.");
       const fileExt = file.name.split('.').pop();
       const fileName = `avatars/${Math.random().toString(36).substring(2)}.${fileExt}`;
       const { error } = await supabase.storage.from('images').upload(fileName, file);
@@ -440,7 +450,7 @@ export const SwapService = {
   },
 
   createListing: async (title: string, description: string, price: number, photoUrl: string) => {
-    if (!isSupabaseConfigured()) return;
+    if (!isSupabaseConfigured()) throw new Error("Ağ hatası.");
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Oturum gerekli");
     await supabase.from('swap_listings').insert({
@@ -460,6 +470,7 @@ export const SwapService = {
   },
 
   uploadImage: async (file: File): Promise<string> => {
+      if (!isSupabaseConfigured()) throw new Error("Ağ hatası.");
       const fileExt = file.name.split('.').pop();
       const fileName = `swap/${Math.random().toString(36).substring(2)}.${fileExt}`;
       const { error } = await supabase.storage.from('images').upload(fileName, file);

@@ -32,9 +32,8 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
     let safetyTimer: any = null;
 
     const handleUserSession = async (user: any) => {
-        if (!user) return;
+        if (!user || !mounted) return;
         
-        // 1. Önbelleğe dayalı hızlı profil
         const tempUser: User = {
             id: user.id,
             name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Kullanıcı',
@@ -44,23 +43,21 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
             goldenHearts: 0,
             silverHearts: 0,
             isAvailable: true,
-            referralCode: 'YUKLENIYOR', 
+            referralCode: '...', 
             wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
         };
         
         ReferralService.saveUserProfile(tempUser);
 
-        if (mounted) {
-            setIsAuthenticated(true);
-            setIsLoading(false);
-        }
+        setIsAuthenticated(true);
+        setIsLoading(false);
+        if (safetyTimer) clearTimeout(safetyTimer);
 
-        // 2. Arka planda gerçek verileri çek
         try {
             const profile = await DBService.getUserProfile(user.id);
-            if (profile) {
+            if (profile && mounted) {
                 ReferralService.saveUserProfile(profile);
-            } else {
+            } else if (mounted) {
                  const newProfile = { 
                      ...tempUser, 
                      referralCode: 'REF' + Math.random().toString(36).substring(2, 8).toUpperCase() 
@@ -69,16 +66,18 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                  ReferralService.saveUserProfile(newProfile);
             }
         } catch (e) {
-            console.error("Profile background sync error", e);
-        } finally {
-            if (safetyTimer) clearTimeout(safetyTimer);
+            console.error("Profile sync error", e);
         }
     };
 
     const initialize = async () => {
-        // Optimistic check
+        if (!mounted) return;
+
+        // 1. Optimistic Check: Sadece GERÇEK bir kullanıcı varsa direkt aç
         const localUser = ReferralService.getUserProfile();
-        if (localUser && localUser.id) {
+        const hasRealUser = localUser && localUser.id && localUser.id !== 'guest' && localUser.id !== 'current-user';
+        
+        if (hasRealUser) {
             setIsAuthenticated(true);
             setIsLoading(false);
         }
@@ -88,43 +87,53 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
             return;
         }
 
-        // Zaman aşımı sayacını başlat
+        // 2. Safety Timer: Ağ isteği çok uzarsa pes et (Süreyi 6sn'ye düşürdük)
         safetyTimer = setTimeout(() => {
             if (mounted && isLoading) {
                 console.warn("Auth check timed out - forcing local state.");
                 setIsLoading(false);
                 const forcedUser = ReferralService.getUserProfile();
-                setIsAuthenticated(!!forcedUser?.id);
+                setIsAuthenticated(!!(forcedUser && forcedUser.id && forcedUser.id !== 'guest'));
             }
-        }, 15000);
+        }, 6000);
 
         try {
-            const { data: { session } } = await supabase.auth.getSession();
+            // getSession'ı bir timeout ile yarıştıralım
+            const sessionPromise = supabase.auth.getSession();
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000));
+            
+            const result = (await Promise.race([sessionPromise, timeoutPromise])) as any;
+            const session = result.data?.session;
+
             if (session?.user) {
                 await handleUserSession(session.user);
             } else {
-                if (mounted && !localUser) {
+                if (mounted && !hasRealUser) {
                     setIsAuthenticated(false);
                     setIsLoading(false);
+                    if (safetyTimer) clearTimeout(safetyTimer);
                 }
             }
         } catch (e) {
-            console.warn("Auth session check error", e);
-            if (mounted) setIsLoading(false);
+            console.warn("Auth initialization error or timeout", e);
+            if (mounted && !hasRealUser) {
+                setIsLoading(false);
+                if (safetyTimer) clearTimeout(safetyTimer);
+            }
         }
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (!mounted) return;
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
             if (session?.user) {
                 await handleUserSession(session.user);
             }
         } else if (event === 'SIGNED_OUT') {
-            if (mounted) {
-                setIsAuthenticated(false);
-                setIsLoading(false);
-                ReferralService.logout();
-            }
+            setIsAuthenticated(false);
+            setIsLoading(false);
+            ReferralService.logout();
+            if (safetyTimer) clearTimeout(safetyTimer);
         }
     });
 
@@ -139,10 +148,15 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
   if (isLoading) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-            <div className="flex flex-col items-center gap-3">
-                <Loader2 className="animate-spin text-slate-900" size={32} />
-                <p className="text-sm font-bold text-gray-500">Workigom Başlatılıyor...</p>
+        <div className="min-h-screen flex items-center justify-center bg-white">
+            <div className="flex flex-col items-center gap-4">
+                <div className="relative">
+                    <div className="w-12 h-12 border-4 border-emerald-100 border-t-emerald-500 rounded-full animate-spin"></div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                    </div>
+                </div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Yükleniyor...</p>
             </div>
         </div>
       );
