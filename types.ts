@@ -147,39 +147,18 @@ const sanitizeAvatarUrl = (url: string | null | undefined): string => {
 // --- Services ---
 
 export const ReferralService = {
-  getUserProfile: (): User => {
+  getUserProfile: (): User | null => {
     try {
       const stored = localStorage.getItem('user_profile');
       if (stored) {
           const user = JSON.parse(stored);
+          if (!user.id || user.id === 'current-user' || user.id === 'guest') return null;
           user.avatar = sanitizeAvatarUrl(user.avatar);
           return user;
       }
-      return {
-        id: 'current-user',
-        name: 'Misafir',
-        avatar: 'https://picsum.photos/200',
-        rating: 0,
-        location: '',
-        goldenHearts: 0,
-        silverHearts: 0,
-        isAvailable: false,
-        referralCode: '',
-        wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
-      };
+      return null;
     } catch {
-      return {
-        id: 'current-user',
-        name: 'Misafir',
-        avatar: 'https://picsum.photos/200',
-        rating: 0,
-        location: '',
-        goldenHearts: 0,
-        silverHearts: 0,
-        isAvailable: false,
-        referralCode: '',
-        wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
-      };
+      return null;
     }
   },
   saveUserProfile: (user: User) => {
@@ -189,6 +168,7 @@ export const ReferralService = {
   logout: () => {
     localStorage.removeItem('user_profile');
     localStorage.removeItem('active_tx'); 
+    localStorage.removeItem('workigom-auth-token');
     window.dispatchEvent(new Event('storage'));
   },
   processReward: (tx: Transaction) => {},
@@ -254,7 +234,7 @@ export const DBService = {
   },
 
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
-    if (!isSupabaseConfigured()) return null;
+    if (!isSupabaseConfigured() || !userId) return null;
     try {
         const { data, error } = await supabase
             .from('transactions')
@@ -307,7 +287,6 @@ export const DBService = {
   getPendingTransactions: async (): Promise<any[]> => { 
     if (!isSupabaseConfigured()) return [];
     try {
-        // Birleştirilmiş sorguyu dene
         const { data, error } = await supabase
             .from('transactions')
             .select('*, profiles!seeker_id(*)')
@@ -315,7 +294,6 @@ export const DBService = {
             .order('created_at', { ascending: false });
 
         if (error) {
-            console.warn("Join failed, trying basic fetch", error);
             const { data: basicData, error: basicError } = await supabase
                 .from('transactions')
                 .select('*')
@@ -327,7 +305,6 @@ export const DBService = {
         }
         return data || [];
     } catch (e) {
-        console.error("getPendingTransactions error:", e);
         return [];
     }
   },

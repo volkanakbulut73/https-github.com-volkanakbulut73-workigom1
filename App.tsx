@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { BottomNav } from './components/BottomNav';
 import { WebNavbar } from './components/WebNavbar';
 import { Sidebar } from './components/Sidebar';
@@ -29,52 +29,12 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
   useEffect(() => {
     let mounted = true;
-    
-    // Safety timeout: Increased to 10s for slow connections
-    const safetyTimer = setTimeout(() => {
-        if (mounted && isLoading) {
-            console.warn("Auth check timed out - forcing state.");
-            setIsLoading(false);
-            const localUser = ReferralService.getUserProfile();
-            setIsAuthenticated(localUser.id !== 'current-user');
-        }
-    }, 10000);
-
-    const initializeAuth = async () => {
-      // 1. Optimistic Check: Local Storage
-      const isOAuthRedirect = window.location.hash && window.location.hash.includes('access_token');
-      const localUser = ReferralService.getUserProfile();
-      
-      if (!isOAuthRedirect && localUser.id !== 'current-user') {
-          if (mounted) {
-              setIsAuthenticated(true);
-              setIsLoading(false);
-          }
-      }
-
-      // 2. Supabase Check
-      if (isSupabaseConfigured()) {
-          try {
-              const { data: { session }, error } = await supabase.auth.getSession();
-
-              if (session?.user) {
-                 await handleUserSession(session.user);
-              } else {
-                 if (!isOAuthRedirect) {
-                     if (mounted) { setIsAuthenticated(false); setIsLoading(false); }
-                 }
-              }
-          } catch (error) {
-              console.warn("Auth check failed:", error);
-              if (mounted) { setIsAuthenticated(false); setIsLoading(false); }
-          }
-      } else {
-          if (mounted) { setIsAuthenticated(false); setIsLoading(false); }
-      }
-    };
+    let safetyTimer: any = null;
 
     const handleUserSession = async (user: any) => {
-        // 1. Construct temporary profile from Auth User Data (available immediately)
+        if (!user) return;
+        
+        // 1. Önbelleğe dayalı hızlı profil
         const tempUser: User = {
             id: user.id,
             name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Kullanıcı',
@@ -90,19 +50,17 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
         
         ReferralService.saveUserProfile(tempUser);
 
-        // 2. Immediate UI unlock - Do not wait for DB
         if (mounted) {
             setIsAuthenticated(true);
             setIsLoading(false);
         }
 
-        // 3. Background Fetch from DB for Wallet/Real Data
+        // 2. Arka planda gerçek verileri çek
         try {
             const profile = await DBService.getUserProfile(user.id);
             if (profile) {
                 ReferralService.saveUserProfile(profile);
             } else {
-                 // First time user? Upsert default profile
                  const newProfile = { 
                      ...tempUser, 
                      referralCode: 'REF' + Math.random().toString(36).substring(2, 8).toUpperCase() 
@@ -113,7 +71,46 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
         } catch (e) {
             console.error("Profile background sync error", e);
         } finally {
-            clearTimeout(safetyTimer);
+            if (safetyTimer) clearTimeout(safetyTimer);
+        }
+    };
+
+    const initialize = async () => {
+        // Optimistic check
+        const localUser = ReferralService.getUserProfile();
+        if (localUser && localUser.id) {
+            setIsAuthenticated(true);
+            setIsLoading(false);
+        }
+
+        if (!isSupabaseConfigured()) {
+            setIsLoading(false);
+            return;
+        }
+
+        // Zaman aşımı sayacını başlat
+        safetyTimer = setTimeout(() => {
+            if (mounted && isLoading) {
+                console.warn("Auth check timed out - forcing local state.");
+                setIsLoading(false);
+                const forcedUser = ReferralService.getUserProfile();
+                setIsAuthenticated(!!forcedUser?.id);
+            }
+        }, 15000);
+
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                await handleUserSession(session.user);
+            } else {
+                if (mounted && !localUser) {
+                    setIsAuthenticated(false);
+                    setIsLoading(false);
+                }
+            }
+        } catch (e) {
+            console.warn("Auth session check error", e);
+            if (mounted) setIsLoading(false);
         }
     };
 
@@ -126,15 +123,16 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
             if (mounted) {
                 setIsAuthenticated(false);
                 setIsLoading(false);
+                ReferralService.logout();
             }
         }
     });
 
-    initializeAuth();
+    initialize();
 
     return () => {
         mounted = false;
-        clearTimeout(safetyTimer);
+        if (safetyTimer) clearTimeout(safetyTimer);
         subscription.unsubscribe();
     };
   }, []);

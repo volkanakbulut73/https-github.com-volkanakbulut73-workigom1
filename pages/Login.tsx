@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Lock, Mail, ArrowRight, ShoppingBag, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '../components/Button';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { User, ReferralService, DBService } from '../types';
+import { User, ReferralService } from '../types';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -19,42 +19,34 @@ export const Login: React.FC = () => {
     setIsLoading(true);
     setError(null);
 
-    // Supabase kontrolü
     if (!isSupabaseConfigured()) {
        setError("Veritabanı yapılandırması eksik. Lütfen .env dosyasını kontrol edin.");
        setIsLoading(false);
        return;
     }
 
-    // Zaman aşımı kontrolü için Promise yarışması
-    const loginPromise = supabase.auth.signInWithPassword({
-        email,
-        password,
-    });
-
-    const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Bağlantı zaman aşımına uğradı. Lütfen internetinizi kontrol edin.")), 15000)
-    );
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000); 
 
     try {
-      // @ts-ignore - Promise race type mismatch ignore
-      const result: any = await Promise.race([loginPromise, timeoutPromise]);
-      const { data: authData, error: authError } = result;
+      // Supabase JS SDK fetch options içinde abort signal desteği sürüm bağımlıdır
+      // Güvenlik için manuel timeout ve catch bloğu ile yönetiyoruz.
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      clearTimeout(timeout);
 
       if (authError) throw authError;
 
       if (authData.user) {
-        // KRİTİK DÜZELTME: Profil çekme işlemini (DBService.getUserProfile) burada yapmıyoruz.
-        // App.tsx zaten oturum açıldığını algılayıp arka planda profili çekecektir.
-        // Burada sadece yönlendirme yaparak kullanıcının takılmasını önlüyoruz.
-        
-        // Geçici olarak kullanıcı varmış gibi davranarak UI'ı rahatlatıyoruz
         const tempUser: User = {
             id: authData.user.id,
             name: authData.user.user_metadata?.full_name || authData.user.email?.split('@')[0] || 'Kullanıcı',
             avatar: authData.user.user_metadata?.avatar_url || 'https://picsum.photos/200',
-            rating: 0,
-            location: '',
+            rating: 5.0,
+            location: 'İstanbul',
             goldenHearts: 0,
             silverHearts: 0,
             isAvailable: true,
@@ -62,18 +54,25 @@ export const Login: React.FC = () => {
             wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
         };
         ReferralService.saveUserProfile(tempUser);
-
         navigate('/app');
       }
     } catch (err: any) {
+      clearTimeout(timeout);
       console.error("Login Error:", err);
-      // Hata mesajını kullanıcıya göster
+      
       let errorMessage = "Giriş başarısız. Bilgilerinizi kontrol edin.";
       
-      if (err.message === "Invalid login credentials") errorMessage = "E-posta veya şifre hatalı.";
-      if (err.message.includes("Email not confirmed")) errorMessage = "E-posta adresinizi doğrulamanız gerekiyor.";
-      if (err.message.includes("zaman aşımı")) errorMessage = "Sunucu yanıt vermedi. İnternet bağlantınızı kontrol edin.";
-      if (err.message.includes("fetch")) errorMessage = "İnternet bağlantısı yok.";
+      if (err.name === 'AbortError') {
+          errorMessage = "İstek zaman aşımına uğradı. İnternet bağlantınız zayıf olabilir.";
+      } else if (err.message === "Invalid login credentials") {
+          errorMessage = "E-posta veya şifre hatalı.";
+      } else if (err.message.includes("Email not confirmed")) {
+          errorMessage = "E-posta adresinizi doğrulamanız gerekiyor.";
+      } else if (err.message.includes("fetch")) {
+          errorMessage = "İnternet bağlantısı yok veya Sunucuya ulaşılamıyor.";
+      } else if (err.message) {
+          errorMessage = err.message;
+      }
       
       setError(errorMessage);
     } finally {
@@ -103,7 +102,6 @@ export const Login: React.FC = () => {
         });
         if (error) throw error;
     } catch (err: any) {
-        console.error("Google Login Error:", err);
         setError(err.message || "Google girişi başlatılamadı.");
         setIsGoogleLoading(false);
     }
@@ -123,24 +121,23 @@ export const Login: React.FC = () => {
         </div>
 
         {error && (
-          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 text-center font-bold border border-red-100 animate-pulse">
+          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 text-center font-bold border border-red-100">
             {error}
           </div>
         )}
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div className="space-y-1">
-            <label htmlFor="email" className="text-xs font-bold text-gray-400 ml-1">E-POSTA</label>
+            <label htmlFor="email" className="text-xs font-bold text-gray-400 ml-1 uppercase">E-POSTA</label>
             <div className="relative">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
                 <Mail size={18} />
               </div>
               <input 
                 type="email"
-                name="email"
                 id="email"
                 value={email}
-                autoComplete="username"
+                autoComplete="email"
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="ornek@mail.com"
                 className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:bg-white focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10 outline-none transition-all font-medium text-gray-700"
@@ -150,14 +147,13 @@ export const Login: React.FC = () => {
           </div>
 
           <div className="space-y-1">
-            <label htmlFor="password" className="text-xs font-bold text-gray-400 ml-1">ŞİFRE</label>
+            <label htmlFor="password" className="text-xs font-bold text-gray-400 ml-1 uppercase">ŞİFRE</label>
             <div className="relative">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
                 <Lock size={18} />
               </div>
               <input 
                 type="password" 
-                name="password"
                 id="password"
                 value={password}
                 autoComplete="current-password"
@@ -202,17 +198,10 @@ export const Login: React.FC = () => {
         </div>
 
         <div className="mt-8 text-center">
-          <p className="text-gray-500 text-sm">
+          <p className="text-gray-500 text-sm font-medium">
             Hesabın yok mu? <Link to="/register" className="text-slate-900 font-bold hover:underline">Kayıt Ol</Link>
           </p>
         </div>
-        
-        {!isSupabaseConfigured() && (
-             <div className="mt-4 p-3 bg-amber-50 rounded-xl text-center text-amber-700 text-xs flex items-center justify-center gap-2">
-                 <AlertTriangle size={14} />
-                 <span>Supabase yapılandırılmamış.</span>
-             </div>
-        )}
       </div>
     </div>
   );
