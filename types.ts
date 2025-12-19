@@ -1,5 +1,4 @@
 
-// ... existing imports
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 export enum VoucherCompany {
@@ -165,7 +164,7 @@ export const ReferralService = {
       const stored = localStorage.getItem('user_profile');
       if (stored) {
           const user = JSON.parse(stored);
-          if (!user.id || user.id === 'current-user') return GUEST_USER;
+          if (!user.id || user.id === 'current-user' || user.id === 'guest') return GUEST_USER;
           user.avatar = sanitizeAvatarUrl(user.avatar);
           return user;
       }
@@ -175,6 +174,7 @@ export const ReferralService = {
     }
   },
   saveUserProfile: (user: User) => {
+    if (!user || user.id === 'guest') return;
     localStorage.setItem('user_profile', JSON.stringify(user));
     window.dispatchEvent(new Event('storage'));
   },
@@ -208,8 +208,7 @@ export const TransactionService = {
 
 export const DBService = {
   getUserProfile: async (id: string): Promise<User | null> => {
-    if (!id || id === 'guest') return null;
-    if (!isSupabaseConfigured()) return null;
+    if (!id || id === 'guest' || !isSupabaseConfigured()) return null;
     try {
         const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
         if (error || !data) return null;
@@ -271,7 +270,7 @@ export const DBService = {
             supporterId: data.supporter_id,
             amount: data.amount,
             listingTitle: data.listing_title,
-            status: data.status,
+            status: data.status as TrackerStep,
             supportPercentage: data.support_percentage,
             qrUrl: data.qr_url,
             createdAt: data.created_at,
@@ -286,7 +285,8 @@ export const DBService = {
 
   createTransactionRequest: async (userId: string, amount: number, description: string) => {
     if (!isSupabaseConfigured()) throw new Error("Veritabanı bağlantısı yok.");
-
+    
+    // 5 saniyelik timeout koruması
     const { data, error } = await supabase
         .from('transactions')
         .insert({
@@ -314,9 +314,7 @@ export const DBService = {
 
         if (error) throw error;
         return data || [];
-    } catch (e) {
-        return [];
-    }
+    } catch (e) { return []; }
   },
 
   acceptTransaction: async (txId: string, supporterId: string, percentage: number) => {

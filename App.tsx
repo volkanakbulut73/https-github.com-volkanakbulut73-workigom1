@@ -21,7 +21,6 @@ import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { Chat } from './pages/Chat';
 import { ReferralService, DBService, User } from './types'; 
 import { supabase, isSupabaseConfigured } from './lib/supabase';
-import { Loader2 } from 'lucide-react';
 
 const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -48,7 +47,6 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
         };
         
         ReferralService.saveUserProfile(tempUser);
-
         setIsAuthenticated(true);
         setIsLoading(false);
         if (safetyTimer) clearTimeout(safetyTimer);
@@ -73,11 +71,9 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
     const initialize = async () => {
         if (!mounted) return;
 
-        // 1. Optimistic Check: Sadece GERÇEK bir kullanıcı varsa direkt aç
+        // 1. Optimistic Check: Sadece GERÇEK bir kullanıcı varsa direkt açmayı dene
         const localUser = ReferralService.getUserProfile();
-        const hasRealUser = localUser && localUser.id && localUser.id !== 'guest' && localUser.id !== 'current-user';
-        
-        if (hasRealUser) {
+        if (localUser && localUser.id && localUser.id !== 'guest') {
             setIsAuthenticated(true);
             setIsLoading(false);
         }
@@ -87,36 +83,33 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
             return;
         }
 
-        // 2. Safety Timer: Ağ isteği çok uzarsa pes et (Süreyi 6sn'ye düşürdük)
+        // 2. Safety Timer: Ağ isteği 8 saniyeyi geçerse pes et ve oturumu kapatmaya zorla
         safetyTimer = setTimeout(() => {
             if (mounted && isLoading) {
-                console.warn("Auth check timed out - forcing local state.");
+                console.warn("Auth check timed out.");
                 setIsLoading(false);
-                const forcedUser = ReferralService.getUserProfile();
-                setIsAuthenticated(!!(forcedUser && forcedUser.id && forcedUser.id !== 'guest'));
+                // Eğer sunucudan yanıt gelmiyorsa ve biz hala loading'deysek, login'e atalım
+                if (!isAuthenticated) {
+                    ReferralService.logout();
+                    setIsAuthenticated(false);
+                }
             }
-        }, 6000);
+        }, 8000);
 
         try {
-            // getSession'ı bir timeout ile yarıştıralım
-            const sessionPromise = supabase.auth.getSession();
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000));
-            
-            const result = (await Promise.race([sessionPromise, timeoutPromise])) as any;
-            const session = result.data?.session;
-
+            const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
                 await handleUserSession(session.user);
             } else {
-                if (mounted && !hasRealUser) {
+                if (mounted) {
                     setIsAuthenticated(false);
                     setIsLoading(false);
                     if (safetyTimer) clearTimeout(safetyTimer);
                 }
             }
         } catch (e) {
-            console.warn("Auth initialization error or timeout", e);
-            if (mounted && !hasRealUser) {
+            console.error("Auth init error", e);
+            if (mounted) {
                 setIsLoading(false);
                 if (safetyTimer) clearTimeout(safetyTimer);
             }
@@ -150,13 +143,8 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
       return (
         <div className="min-h-screen flex items-center justify-center bg-white">
             <div className="flex flex-col items-center gap-4">
-                <div className="relative">
-                    <div className="w-12 h-12 border-4 border-emerald-100 border-t-emerald-500 rounded-full animate-spin"></div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                    </div>
-                </div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Yükleniyor...</p>
+                <div className="w-12 h-12 border-4 border-emerald-100 border-t-emerald-500 rounded-full animate-spin"></div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Hazırlanıyor...</p>
             </div>
         </div>
       );

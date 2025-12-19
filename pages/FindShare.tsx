@@ -60,7 +60,7 @@ export const FindShare: React.FC = () => {
                 if (!prev) return null;
                 return {
                     ...prev,
-                    status: newData.status,
+                    status: newData.status as TrackerStep,
                     supporterId: newData.supporter_id,
                     supportPercentage: newData.support_percentage,
                     qrUrl: newData.qr_url,
@@ -82,7 +82,12 @@ export const FindShare: React.FC = () => {
     try {
       if (!isSupabaseConfigured()) throw new Error("Sistem yapılandırılmamış.");
 
-      const { data: { session } } = await supabase.auth.getSession();
+      // Oturum Kontrolü (Zaman aşımı korumalı)
+      const sessionPromise = supabase.auth.getSession();
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Oturum kontrolü zaman aşımına uğradı.")), 5000));
+      
+      const { data: { session } } = (await Promise.race([sessionPromise, timeoutPromise])) as any;
+      
       if (!session?.user) {
           throw new Error("Lütfen önce giriş yapın.");
       }
@@ -92,7 +97,11 @@ export const FindShare: React.FC = () => {
          throw new Error("Tutar 50 - 5000 TL arasında olmalıdır.");
       }
 
-      const newTxData = await DBService.createTransactionRequest(session.user.id, val, description);
+      // Veritabanı Kaydı (Zaman aşımı korumalı)
+      const dbRequest = DBService.createTransactionRequest(session.user.id, val, description);
+      const dbTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Sunucu yanıt vermiyor. Lütfen internetinizi kontrol edin.")), 8000));
+      
+      const newTxData = (await Promise.race([dbRequest, dbTimeout])) as any;
       
       const realTx: Transaction = {
           id: newTxData.id,
@@ -112,13 +121,12 @@ export const FindShare: React.FC = () => {
       
     } catch (error: any) {
       console.error("Create TX Error:", error);
-      alert(error.message || "İşlem oluşturulurken bir hata oluşti.");
+      alert(error.message || "İşlem oluşturulurken bir hata oluştu.");
     } finally {
       setCreating(false);
     }
   };
 
-  // ... rest of the functions (handleCashPaid, etc) remain similar but without mock checks
   const handleCashPaid = async () => {
     if (!activeTransaction) return;
     try {
@@ -151,7 +159,7 @@ export const FindShare: React.FC = () => {
         setActiveTransaction(null);
         TransactionService.clearActive();
         navigate('/app'); 
-    } catch (e) { alert("Hata."); }
+    } catch (e) { alert("İptal işlemi başarısız."); }
     finally { setLoading(false); }
   };
 
@@ -256,7 +264,7 @@ export const FindShare: React.FC = () => {
                      type="number" 
                      value={amount}
                      onChange={(e) => setAmount(e.target.value)}
-                     className="w-full text-2xl font-black text-slate-800 bg-gray-50 rounded-xl p-4 mt-1 outline-none"
+                     className="w-full text-2xl font-black text-slate-800 bg-gray-50 rounded-xl p-4 mt-1 outline-none focus:ring-2 focus:ring-slate-900"
                   />
               </div>
 
@@ -265,7 +273,7 @@ export const FindShare: React.FC = () => {
                   <textarea 
                      value={description}
                      onChange={(e) => setDescription(e.target.value)}
-                     className="w-full mt-1 bg-gray-50 rounded-xl p-4 text-sm font-medium h-24 resize-none outline-none"
+                     className="w-full mt-1 bg-gray-50 rounded-xl p-4 text-sm font-medium h-24 resize-none outline-none focus:ring-2 focus:ring-slate-900"
                      placeholder="Restoran adı veya konum..."
                   />
               </div>
