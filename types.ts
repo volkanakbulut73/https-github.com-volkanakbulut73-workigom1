@@ -146,19 +146,32 @@ const sanitizeAvatarUrl = (url: string | null | undefined): string => {
 
 // --- Services ---
 
+const GUEST_USER: User = {
+  id: 'guest',
+  name: 'Misafir',
+  avatar: 'https://picsum.photos/200',
+  rating: 0,
+  location: '',
+  goldenHearts: 0,
+  silverHearts: 0,
+  isAvailable: false,
+  referralCode: '',
+  wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
+};
+
 export const ReferralService = {
-  getUserProfile: (): User | null => {
+  getUserProfile: (): User => {
     try {
       const stored = localStorage.getItem('user_profile');
       if (stored) {
           const user = JSON.parse(stored);
-          if (!user.id || user.id === 'current-user' || user.id === 'guest') return null;
+          if (!user.id || user.id === 'current-user') return GUEST_USER;
           user.avatar = sanitizeAvatarUrl(user.avatar);
           return user;
       }
-      return null;
+      return GUEST_USER;
     } catch {
-      return null;
+      return GUEST_USER;
     }
   },
   saveUserProfile: (user: User) => {
@@ -195,6 +208,7 @@ export const TransactionService = {
 
 export const DBService = {
   getUserProfile: async (id: string): Promise<User | null> => {
+    if (!id || id === 'guest') return null;
     try {
         const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
         if (error || !data) return null;
@@ -218,7 +232,7 @@ export const DBService = {
   },
 
   upsertProfile: async (user: User) => {
-      if (!isSupabaseConfigured()) return;
+      if (!isSupabaseConfigured() || user.id === 'guest') return;
       await supabase.from('profiles').upsert({
           id: user.id,
           full_name: user.name,
@@ -234,7 +248,7 @@ export const DBService = {
   },
 
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
-    if (!isSupabaseConfigured() || !userId) return null;
+    if (!isSupabaseConfigured() || !userId || userId === 'guest') return null;
     try {
         const { data, error } = await supabase
             .from('transactions')

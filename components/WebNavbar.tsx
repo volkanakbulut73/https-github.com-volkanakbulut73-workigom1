@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Wallet, LogIn, UserPlus } from 'lucide-react';
@@ -6,8 +7,8 @@ import { ReferralService } from '../types';
 export const WebNavbar: React.FC<{ isLanding?: boolean }> = ({ isLanding = false }) => {
   const navigate = useNavigate();
   const user = ReferralService.getUserProfile();
-  // Simple check if user is roughly logged in based on ID (mock logic)
-  const isLoggedIn = user.id !== 'mock-user-demo' && user.id !== 'guest' && user.id !== 'current-user';
+  // Safe check for login status
+  const isLoggedIn = user?.id && user.id !== 'guest' && user.id !== 'current-user';
 
   return (
     <nav className={`w-full z-50 transition-all ${isLanding ? 'absolute top-0 left-0 bg-transparent py-6' : 'bg-white border-b border-gray-100 sticky top-0 py-4'}`}>
@@ -52,6 +53,18 @@ export const WebNavbar: React.FC<{ isLanding?: boolean }> = ({ isLanding = false
                   <UserPlus size={16} /> Kayıt Ol
                 </Link>
               </>
+            )}
+            {isLoggedIn && (
+               <Link 
+                to="/app" 
+                className={`px-5 py-2.5 rounded-full font-bold text-sm transition-all flex items-center gap-2 ${
+                  isLanding 
+                    ? 'bg-white text-slate-900' 
+                    : 'bg-slate-900 text-white'
+                }`}
+              >
+                Uygulamaya Git
+              </Link>
             )}
           </div>
         </div>
