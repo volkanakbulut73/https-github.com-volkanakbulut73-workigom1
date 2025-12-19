@@ -28,141 +28,79 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
   useEffect(() => {
     let mounted = true;
-    let safetyTimer: any = null;
 
-    const handleUserSession = async (user: any) => {
-        if (!user || !mounted) return;
+    const checkAuth = async () => {
+      if (!isSupabaseConfigured()) {
+        if (mounted) {
+          setIsLoading(false);
+          setIsAuthenticated(false);
+        }
+        return;
+      }
+
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
         
-        const tempUser: User = {
-            id: user.id,
-            name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Kullanıcı',
-            avatar: user.user_metadata?.avatar_url || 'https://picsum.photos/200',
-            rating: 5.0,
-            location: 'İstanbul',
-            goldenHearts: 0,
-            silverHearts: 0,
-            isAvailable: true,
-            referralCode: '...', 
-            wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
-        };
-        
-        ReferralService.saveUserProfile(tempUser);
-        setIsAuthenticated(true);
-        setIsLoading(false);
-        if (safetyTimer) clearTimeout(safetyTimer);
-
-        try {
-            const profile = await DBService.getUserProfile(user.id);
-            if (profile && mounted) {
-                ReferralService.saveUserProfile(profile);
-            } else if (mounted) {
-                 const newProfile = { 
-                     ...tempUser, 
-                     referralCode: 'REF' + Math.random().toString(36).substring(2, 8).toUpperCase() 
-                 };
-                 await DBService.upsertProfile(newProfile);
-                 ReferralService.saveUserProfile(newProfile);
-            }
-        } catch (e) {
-            console.error("Profile sync error", e);
-        }
-    };
-
-    const initialize = async () => {
-        if (!mounted) return;
-
-        // 1. Optimistic Check: Sadece GERÇEK bir kullanıcı varsa direkt açmayı dene
-        const localUser = ReferralService.getUserProfile();
-        if (localUser && localUser.id && localUser.id !== 'guest') {
-            setIsAuthenticated(true);
-            setIsLoading(false);
-        }
-
-        if (!isSupabaseConfigured()) {
-            setIsLoading(false);
-            return;
-        }
-
-        // 2. Safety Timer: Ağ isteği 8 saniyeyi geçerse pes et ve oturumu kapatmaya zorla
-        safetyTimer = setTimeout(() => {
-            if (mounted && isLoading) {
-                console.warn("Auth check timed out.");
-                setIsLoading(false);
-                // Eğer sunucudan yanıt gelmiyorsa ve biz hala loading'deysek, login'e atalım
-                if (!isAuthenticated) {
-                    ReferralService.logout();
-                    setIsAuthenticated(false);
-                }
-            }
-        }, 8000);
-
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                await handleUserSession(session.user);
-            } else {
-                if (mounted) {
-                    setIsAuthenticated(false);
-                    setIsLoading(false);
-                    if (safetyTimer) clearTimeout(safetyTimer);
-                }
-            }
-        } catch (e) {
-            console.error("Auth init error", e);
-            if (mounted) {
-                setIsLoading(false);
-                if (safetyTimer) clearTimeout(safetyTimer);
-            }
-        }
-    };
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (!mounted) return;
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-            if (session?.user) {
-                await handleUserSession(session.user);
-            }
-        } else if (event === 'SIGNED_OUT') {
+        if (error || !session?.user) {
+          if (mounted) {
             setIsAuthenticated(false);
             setIsLoading(false);
-            ReferralService.logout();
-            if (safetyTimer) clearTimeout(safetyTimer);
+          }
+          return;
         }
-    });
 
-    initialize();
-
-    return () => {
-        mounted = false;
-        if (safetyTimer) clearTimeout(safetyTimer);
-        subscription.unsubscribe();
+        const user = session.user;
+        const profile = await DBService.getUserProfile(user.id);
+        
+        if (mounted) {
+          if (profile) {
+            ReferralService.saveUserProfile(profile);
+          } else {
+            // Profil yoksa geçici oluştur
+            const temp: User = {
+              id: user.id,
+              name: user.user_metadata?.full_name || 'Kullanıcı',
+              avatar: user.user_metadata?.avatar_url || 'https://picsum.photos/200',
+              rating: 5, location: 'İstanbul', goldenHearts: 0, silverHearts: 0,
+              isAvailable: true, referralCode: 'REF',
+              wallet: { balance: 0, totalEarnings: 0, pendingBalance: 0 }
+            };
+            ReferralService.saveUserProfile(temp);
+          }
+          setIsAuthenticated(true);
+          setIsLoading(false);
+        }
+      } catch (e) {
+        console.error("Auth process failed:", e);
+        if (mounted) {
+          setIsAuthenticated(false);
+          setIsLoading(false);
+        }
+      }
     };
+
+    checkAuth();
+    return () => { mounted = false; };
   }, []);
 
   if (isLoading) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-white">
-            <div className="flex flex-col items-center gap-4">
-                <div className="w-12 h-12 border-4 border-emerald-100 border-t-emerald-500 rounded-full animate-spin"></div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Hazırlanıyor...</p>
-            </div>
-        </div>
-      );
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+        <div className="w-12 h-12 border-4 border-slate-100 border-t-slate-900 rounded-full animate-spin mb-4"></div>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Bağlantı Kuruluyor...</p>
+      </div>
+    );
   }
 
-  if (!isAuthenticated) {
-      return <Navigate to="/login" replace />;
-  }
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-900 flex">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="md:hidden">
-           <WebNavbar />
-        </div>
+        <div className="md:hidden"><WebNavbar /></div>
         <main className="flex-1 w-full max-w-5xl mx-auto p-0 md:p-6 lg:p-8">
-           {children}
+          {children}
         </main>
         <BottomNav />
       </div>
@@ -171,49 +109,21 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   );
 };
 
-const AuthLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return (
-    <div className="min-h-screen bg-white font-sans text-gray-900">
-      <WebNavbar />
-      {children}
-    </div>
-  );
-};
+const AppRoutes: React.FC = () => (
+  <Routes>
+    <Route path="/" element={<Landing />} />
+    <Route path="/login" element={<Login />} />
+    <Route path="/register" element={<Register />} />
+    <Route path="/app" element={<DashboardLayout><Home /></DashboardLayout>} />
+    <Route path="/find-share" element={<DashboardLayout><FindShare /></DashboardLayout>} />
+    <Route path="/supporters" element={<DashboardLayout><Supporters /></DashboardLayout>} />
+    <Route path="/profile" element={<DashboardLayout><Profile /></DashboardLayout>} />
+    <Route path="/swap" element={<DashboardLayout><SwapList /></DashboardLayout>} />
+    <Route path="/chat" element={<DashboardLayout><Chat /></DashboardLayout>} />
+    <Route path="*" element={<Navigate to="/" replace />} />
+  </Routes>
+);
 
-const AppRoutes: React.FC = () => {
-  return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/privacy" element={<PrivacyPolicy />} />
-      <Route path="/login" element={<AuthLayout><Login /></AuthLayout>} />
-      <Route path="/register" element={<AuthLayout><Register /></AuthLayout>} />
-      
-      {/* Protected Routes */}
-      <Route path="/app" element={<DashboardLayout><Home /></DashboardLayout>} />
-      <Route path="/find-share" element={<DashboardLayout><FindShare /></DashboardLayout>} />
-      <Route path="/supporters" element={<DashboardLayout><Supporters /></DashboardLayout>} />
-      <Route path="/profile" element={<DashboardLayout><Profile /></DashboardLayout>} />
-      
-      <Route path="/swap" element={<DashboardLayout><SwapList /></DashboardLayout>} />
-      <Route path="/swap/create" element={<DashboardLayout><SwapCreate /></DashboardLayout>} />
-      <Route path="/swap/:id" element={<DashboardLayout><SwapDetail /></DashboardLayout>} />
-      
-      <Route path="/invite" element={<DashboardLayout><Invite /></DashboardLayout>} />
-      <Route path="/earnings" element={<DashboardLayout><Earnings /></DashboardLayout>} />
-      
-      <Route path="/chat" element={<DashboardLayout><Chat /></DashboardLayout>} />
-
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  );
-};
-
-const App: React.FC = () => {
-  return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
-  );
-};
-
-export default App;
+export default function App() {
+  return <BrowserRouter><AppRoutes /></BrowserRouter>;
+}
