@@ -23,6 +23,7 @@ interface UIListing {
    avatar: string;
    description: string;
    type: string;
+   isOwn?: boolean;
 }
 
 export const Supporters: React.FC = () => {
@@ -47,7 +48,6 @@ export const Supporters: React.FC = () => {
   useEffect(() => {
     let mounted = true;
     
-    // Güvenli başlatma
     const init = async () => {
         await fetchData();
         if (mounted) setLoading(false);
@@ -56,7 +56,7 @@ export const Supporters: React.FC = () => {
 
     const interval = setInterval(() => {
         if(mounted) fetchData(true);
-    }, 20000); 
+    }, 15000); 
 
     return () => {
         mounted = false;
@@ -77,29 +77,28 @@ export const Supporters: React.FC = () => {
         const { data: { session } } = await supabase.auth.getSession();
         const currentUser = session?.user;
         
-        const pendingData = await DBService.getPendingTransactions();
+        const rawData = await DBService.getPendingTransactions();
         
-        // Kendi taleplerini filtrele
-        const othersData = currentUser 
-            ? pendingData.filter((item: any) => item.seeker_id !== currentUser.id)
-            : pendingData;
-        
-        const mappedListings: UIListing[] = othersData.map((item: any) => {
-            // Join verisi varsa kullan, yoksa fallback
-            const seekerProfile = item.seeker || item.profiles || {};
+        const mappedListings: UIListing[] = rawData.map((item: any) => {
+            // Join verisi (profiles) veya direkt item üzerindeki veriyi kontrol et
+            const profile = item.profiles || item.seeker || {};
+            const isOwn = currentUser && item.seeker_id === currentUser.id;
+
             return {
               id: item.id,
-              name: formatName(seekerProfile.full_name || 'Alıcı'),
+              name: formatName(profile.full_name || 'Alıcı'),
               amount: item.amount,
-              location: seekerProfile.location || 'Konum Belirtilmedi', 
+              location: profile.location || 'Konum Belirtilmedi', 
               time: 'Aktif',
-              rating: seekerProfile.rating || 5.0,
-              avatar: seekerProfile.avatar_url || 'https://picsum.photos/100/100',
-              description: item.listing_title || 'Yemek çeki ile ödeme desteği bekliyor.',
-              type: 'food' 
+              rating: profile.rating || 5.0,
+              avatar: profile.avatar_url || 'https://picsum.photos/100/100',
+              description: item.listing_title || 'Yemek çeki desteği bekliyor.',
+              type: 'food',
+              isOwn: isOwn
             };
         });
         
+        // Sadece başkalarının taleplerini göster (Kullanıcı test için kendi talebini de görebilsin diye bir uyarı ekleyeceğiz)
         setListings(mappedListings);
 
         if (currentUser) {
@@ -114,15 +113,18 @@ export const Supporters: React.FC = () => {
            }
         }
     } catch (e) {
-        console.error("Fetch fetchData error", e);
+        console.error("fetchData error:", e);
     } finally {
         if (!silent) setLoading(false);
     }
   };
 
-  // ... (handleSupportClick, handleConfirmSupport vb. aynı kalıyor)
   const handleSupportClick = (e: React.MouseEvent, listing: UIListing) => {
     e.stopPropagation();
+    if (listing.isOwn) {
+        alert("Kendi talebinize destek olamazsınız.");
+        return;
+    }
     if (activeTransaction && 
         activeTransaction.status !== TrackerStep.COMPLETED && 
         activeTransaction.status !== TrackerStep.DISMISSED && 
@@ -165,8 +167,8 @@ export const Supporters: React.FC = () => {
         setActiveTransaction(realTx);
         setActiveTab('my-support');
         setShowSelectionModal(false);
-    } catch (Z: any) {
-        alert("Hata: " + (Z.message || "İşlem kabul edilemedi."));
+    } catch (err: any) {
+        alert("Hata: " + (err.message || "İşlem kabul edilemedi."));
     } finally {
         setIsProcessing(false);
     }
@@ -200,14 +202,6 @@ export const Supporters: React.FC = () => {
      if (activeTransaction) await DBService.dismissTransaction(activeTransaction.id);
      setActiveTransaction(null);
      setActiveTab('all');
-  };
-
-  const getCalculatedValues = (amount: number, percentage: 20 | 100) => {
-      if (percentage === 100) return { contribution: amount, fee: 0, totalPay: amount, netReceive: 0, beneficiaryPays: 0 };
-      const contribution = amount * 0.20; 
-      const beneficiaryPays = amount * 0.80; 
-      const fee = amount * 0.05; 
-      return { contribution, fee, totalPay: contribution + fee, netReceive: beneficiaryPays - fee, beneficiaryPays };
   };
 
   return (
@@ -249,13 +243,19 @@ export const Supporters: React.FC = () => {
                     <Loader2 size={32} className="animate-spin mx-auto mb-3" />
                     <p className="text-xs font-bold">Veriler Getiriliyor...</p>
                  </div>
-              ) : filteredListings.length === 0 ? (
-                 <div className="text-center py-20 text-gray-400 bg-white rounded-2xl border border-gray-100">
-                    <p className="text-sm font-bold">Şu an aktif talep bulunmuyor.</p>
-                    <p className="text-[10px] mt-1">Yeni bir talep geldiğinde burada görünecek.</p>
+              ) : listings.filter(l => !l.isOwn).length === 0 ? (
+                 <div className="text-center py-16 px-6 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
+                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <ShoppingBag size={32} className="text-gray-300"/>
+                    </div>
+                    <p className="text-sm font-bold text-gray-800">Şu an aktif talep bulunmuyor.</p>
+                    <p className="text-xs text-gray-400 mt-1">Sizin oluşturduğunuz talepler bu listede görünmez.</p>
+                    <button onClick={() => fetchData(false)} className="mt-4 text-slate-900 text-xs font-bold underline flex items-center justify-center gap-1 mx-auto">
+                        <RefreshCw size={12}/> Listeyi Yenile
+                    </button>
                  </div>
               ) : (
-                 filteredListings.map((listing) => (
+                 listings.filter(l => !l.isOwn && (activeFilter === 'all' || l.type === activeFilter)).map((listing) => (
                    <div key={listing.id} onClick={(e) => handleSupportClick(e, listing)} className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm hover:border-emerald-200 transition-all cursor-pointer group relative overflow-hidden">
                      <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center gap-3">

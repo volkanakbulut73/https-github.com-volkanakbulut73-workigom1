@@ -1,5 +1,4 @@
 
-
 // ... existing imports
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
@@ -107,8 +106,6 @@ export const formatName = (fullName: string): string => {
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 };
 
-const isUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -143,7 +140,7 @@ export const calculateTransaction = (amount: number, percentage: 20 | 100) => {
 
 const sanitizeAvatarUrl = (url: string | null | undefined): string => {
     if (!url) return 'https://picsum.photos/200';
-    if (url.startsWith('blob:')) return 'https://picsum.photos/200';
+    if (typeof url === 'string' && url.startsWith('blob:')) return 'https://picsum.photos/200';
     return url;
 };
 
@@ -310,29 +307,27 @@ export const DBService = {
   getPendingTransactions: async (): Promise<any[]> => { 
     if (!isSupabaseConfigured()) return [];
     try {
-        // Fallback mekanizması: Önce join ile dene
-        const { data: joinData, error: joinError } = await supabase
+        // Birleştirilmiş sorguyu dene
+        const { data, error } = await supabase
             .from('transactions')
-            .select(`*, seeker:profiles!seeker_id(full_name, avatar_url, rating, location)`)
+            .select('*, profiles!seeker_id(*)')
             .eq('status', 'waiting-supporter')
             .order('created_at', { ascending: false });
-        
-        if (!joinError && joinData) {
-            return joinData;
+
+        if (error) {
+            console.warn("Join failed, trying basic fetch", error);
+            const { data: basicData, error: basicError } = await supabase
+                .from('transactions')
+                .select('*')
+                .eq('status', 'waiting-supporter')
+                .order('created_at', { ascending: false });
+            
+            if (basicError) throw basicError;
+            return basicData || [];
         }
-
-        // Join hatası (schema mismatch) durumunda düz veri çek
-        console.warn("Join failed in getPendingTransactions, using basic fetch fallback.");
-        const { data: basicData, error: basicError } = await supabase
-            .from('transactions')
-            .select(`*`)
-            .eq('status', 'waiting-supporter')
-            .order('created_at', { ascending: false });
-
-        if (basicError) throw basicError;
-        return basicData || [];
+        return data || [];
     } catch (e) {
-        console.error("DB Pending Tx Error:", e);
+        console.error("getPendingTransactions error:", e);
         return [];
     }
   },
