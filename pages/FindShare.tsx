@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Wallet, Clock, Star, Loader2, Info, XCircle, Home, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
-import { Transaction, TrackerStep, TransactionService, ReferralService, DBService, calculateTransaction, formatName } from '../types';
+import { Transaction, TrackerStep, TransactionService, ReferralService, User, DBService, calculateTransaction, formatName } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const FindShare: React.FC = () => {
@@ -17,26 +17,29 @@ export const FindShare: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // State'i anlık takip etmek için ref kullanıyoruz
   const activeTxRef = useRef<Transaction | null>(null);
 
   useEffect(() => {
     activeTxRef.current = activeTransaction;
   }, [activeTransaction]);
 
-  // 1. Initial Load
   useEffect(() => {
     const init = async () => {
         let userId = 'current-user';
         if (isSupabaseConfigured()) {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                userId = session.user.id;
-            } else {
-                const localUser = ReferralService.getUserProfile();
-                if (localUser && localUser.id !== 'current-user') {
-                    userId = localUser.id;
+            try {
+                // Network'e çıkmadan önce local session'ı kontrol et
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                    userId = session.user.id;
+                } else {
+                    const localUser = ReferralService.getUserProfile();
+                    if (localUser && localUser.id !== 'current-user') {
+                        userId = localUser.id;
+                    }
                 }
+            } catch (e) {
+                console.warn("Session init error", e);
             }
         }
 
@@ -48,7 +51,6 @@ export const FindShare: React.FC = () => {
     init();
   }, []);
 
-  // 2. Realtime Subscription
   useEffect(() => {
     if (!activeTransaction?.id || !isSupabaseConfigured()) return;
 
@@ -98,7 +100,6 @@ export const FindShare: React.FC = () => {
     };
   }, [activeTransaction?.id]); 
 
-  // 3. Güvenli Polling
   useEffect(() => {
       let isFetching = false;
       const interval = setInterval(async () => {
@@ -122,12 +123,11 @@ export const FindShare: React.FC = () => {
           } finally {
               isFetching = false;
           }
-      }, 10000); 
+      }, 15000); 
 
       return () => clearInterval(interval);
   }, []);
 
-  // Timer logic
   useEffect(() => {
       if (activeTransaction?.status === TrackerStep.QR_UPLOADED && activeTransaction.qrUploadedAt) {
           const startTime = new Date(activeTransaction.qrUploadedAt).getTime();
@@ -161,48 +161,53 @@ export const FindShare: React.FC = () => {
     setCreating(true);
 
     try {
-      // 1. Config Check
       if (!isSupabaseConfigured()) {
-          throw new Error("Veritabanı bağlantısı yapılamadı. (Supabase Config Eksik)");
+          throw new Error("Supabase yapılandırması eksik. Lütfen VITE_SUPABASE_URL ve VITE_SUPABASE_ANON_KEY ayarlarını kontrol edin.");
       }
 
-      // 2. Auth Check with Timeout
-      const authPromise = supabase.auth.getUser();
-      const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Bağlantı zaman aşımı (Auth). İnternet bağlantınızı kontrol edin.")), 10000)
-      );
-      
-      // @ts-ignore
-      const { data: { user }, error: authError } = await Promise.race([authPromise, timeoutPromise]);
+      // 1. Önce Önbellekteki Oturumu Kontrol Et (Network Gerektirmez)
+      const { data: { session } } = await supabase.auth.getSession();
+      let user = session?.user;
 
-      if (authError || !user) {
-         alert("Lütfen önce giriş yapın.");
-         navigate('/login');
-         return;
+      // 2. Eğer session yoksa, local profile'dan ID almayı dene (DashboardLayout sayesinde güvenliyiz)
+      if (!user) {
+          const localProfile = ReferralService.getUserProfile();
+          if (localProfile && localProfile.id !== 'current-user') {
+              // Local ID ile devam etmeyi deneyebiliriz, ancak Supabase DB işlemleri için valid bir UUID lazım
+              // getUser ile network'e çıkmayı deneyelim ama daha toleranslı bir timeout ile
+              const authPromise = supabase.auth.getUser();
+              const timeoutPromise = new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error("Sunucuya bağlanılamıyor. İnternet bağlantınızı veya Supabase ayarlarınızı kontrol edin.")), 15000)
+              );
+              
+              const authResult = (await Promise.race([authPromise, timeoutPromise])) as any;
+              user = authResult.data?.user;
+          }
+      }
+
+      if (!user) {
+         throw new Error("Oturum doğrulanamadı. Lütfen sayfayı yenileyip tekrar giriş yapın.");
       }
 
       const userId = user.id;
       const val = parseFloat(amount);
       
-      // 3. Validation
       if (isNaN(val) || val < 50 || val > 5000) {
          throw new Error("Tutar 50 - 5000 TL arasında olmalıdır.");
       }
 
-      // 4. DB Request with Timeout
+      // 3. Veritabanı Kaydı (Burada network mecburi)
       const dbPromise = DBService.createTransactionRequest(userId, val, description);
       const dbTimeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("İşlem oluşturulurken sunucu yanıt vermedi. Lütfen tekrar deneyin.")), 15000)
+          setTimeout(() => reject(new Error("İşlem oluşturulurken sunucu yanıt vermedi. (Network Timeout)")), 15000)
       );
 
-      // @ts-ignore
-      const newTxData = await Promise.race([dbPromise, dbTimeoutPromise]);
+      const newTxData = (await Promise.race([dbPromise, dbTimeoutPromise])) as any;
 
       if (!newTxData) {
-          throw new Error("Veri oluşturulamadı.");
+          throw new Error("Veritabanı kaydı oluşturulamadı.");
       }
 
-      // 5. Success State Update
       const localTx: Transaction = {
           id: newTxData.id,
           seekerId: userId,
@@ -221,13 +226,17 @@ export const FindShare: React.FC = () => {
       
     } catch (error: any) {
       console.error("Create TX Error:", error);
-      let msg = error.message || "Bir hata oluştu.";
-      if (msg.includes("row-level security")) {
-          msg = "Yetki hatası: İşlem yapmaya izniniz yok veya oturumunuz kapanmış. Lütfen çıkış yapıp tekrar girin.";
+      let msg = error.message || "Bilinmeyen bir hata oluştu.";
+      
+      // Daha kullanıcı dostu hata mesajları
+      if (msg.includes("Failed to fetch") || msg.includes("network")) {
+          msg = "İnternet bağlantısı kurulamadı. Lütfen bağlantınızı kontrol edip tekrar deneyin.";
+      } else if (msg.includes("row-level security") || msg.includes("RLS")) {
+          msg = "Erişim yetkisi hatası. Lütfen çıkış yapıp tekrar giriş yapın.";
       }
-      alert("Hata: " + msg);
+      
+      alert(msg);
     } finally {
-      // Her durumda spinner'ı durdur
       setCreating(false);
     }
   };

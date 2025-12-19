@@ -32,14 +32,16 @@ export const analyzeDealWithGemini = async (voucher: Voucher): Promise<string> =
   `;
 
   try {
+    // Model choice based on guidelines for Basic Text Tasks
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         thinkingConfig: { thinkingBudget: 0 } // Disable thinking for faster simple response
       }
     });
 
+    // response.text is a getter property, not a method
     return response.text || "Analiz şu anda yapılamadı.";
   } catch (error) {
     console.error("Gemini Error:", error);
