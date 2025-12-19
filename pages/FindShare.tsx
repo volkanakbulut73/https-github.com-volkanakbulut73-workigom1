@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Wallet, Clock, Star, Loader2, Info, XCircle, Home, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
-import { Transaction, TrackerStep, TransactionService, ReferralService, User, DBService, calculateTransaction, formatName } from '../types';
+// Fix: Removed non-existent TransactionService import
+import { Transaction, TrackerStep, ReferralService, User, DBService, calculateTransaction, formatName } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const FindShare: React.FC = () => {
@@ -27,14 +28,19 @@ export const FindShare: React.FC = () => {
         if (session?.user) {
             const tx = await DBService.getActiveTransaction(session.user.id);
             if (tx) {
-                setActiveTransaction(tx);
-            } else if (activeTransaction && !tx) {
-                // Eğer bittiyse veya iptal edildiyse temizle
+                // Sadece durum değiştiyse veya yeni oluştuysa state güncelle (re-render optimizasyonu)
+                setActiveTransaction(prev => {
+                    if (!prev || prev.status !== tx.status || prev.supporterId !== tx.supporterId) {
+                        return tx;
+                    }
+                    return prev;
+                });
+            } else if (activeTransaction) {
                 setActiveTransaction(null);
             }
         }
     } catch (e) {
-        console.warn("Polling check failed", e);
+        console.warn("Status check failed", e);
     } finally {
         if (!silent) setRefreshing(false);
     }
@@ -42,8 +48,8 @@ export const FindShare: React.FC = () => {
 
   useEffect(() => {
     fetchCurrentStatus();
-    // Realtime çalışmasa bile her 10 saniyede bir kontrol et (Güvenlik önlemi)
-    pollIntervalRef.current = setInterval(() => fetchCurrentStatus(true), 10000);
+    // Realtime bağlantısı kopsa bile her 5 saniyede bir kontrol et (Daha agresif polling)
+    pollIntervalRef.current = setInterval(() => fetchCurrentStatus(true), 5000);
     return () => clearInterval(pollIntervalRef.current);
   }, []);
 
@@ -51,10 +57,11 @@ export const FindShare: React.FC = () => {
     if (!activeTransaction?.id || !isSupabaseConfigured()) return;
 
     if (activeTransaction.status === TrackerStep.COMPLETED || 
-        activeTransaction.status === TrackerStep.CANCELLED) return;
+        activeTransaction.status === TrackerStep.CANCELLED ||
+        activeTransaction.status === TrackerStep.DISMISSED) return;
 
-    // Realtime aboneliği
-    const channel = supabase.channel(`tx_${activeTransaction.id}`)
+    // Realtime aboneliği - transactions tablosundaki spesifik satırı izle
+    const channel = supabase.channel(`tx_view_${activeTransaction.id}`)
         .on('postgres_changes', { 
             event: 'UPDATE', 
             schema: 'public', 
@@ -65,6 +72,7 @@ export const FindShare: React.FC = () => {
             if (newData) {
                 setActiveTransaction(prev => {
                     if (!prev) return null;
+                    // Mevcut state'deki isimleri koruyarak sadece dinamik alanları güncelle
                     return {
                         ...prev,
                         status: newData.status as TrackerStep,
@@ -76,7 +84,11 @@ export const FindShare: React.FC = () => {
                 });
             }
         })
-        .subscribe();
+        .subscribe((status: string) => {
+            if (status === 'SUBSCRIBED') {
+                console.debug("Realtime tracking active for:", activeTransaction.id);
+            }
+        });
 
     return () => { supabase.removeChannel(channel); };
   }, [activeTransaction?.id]); 
@@ -124,7 +136,8 @@ export const FindShare: React.FC = () => {
     setLoading(true);
     try {
         await DBService.markCashPaid(activeTransaction.id);
-        await fetchCurrentStatus(true);
+        // Onay sonrası state'i anında güncelle (Realtime beklemeden UI tepki versin)
+        setActiveTransaction({ ...activeTransaction, status: TrackerStep.CASH_PAID });
     } catch (e) {
         setFormError("Onay verilemedi.");
     } finally {
@@ -137,7 +150,7 @@ export const FindShare: React.FC = () => {
     setLoading(true);
     try {
         await DBService.completeTransaction(activeTransaction.id);
-        await fetchCurrentStatus(true);
+        setActiveTransaction({ ...activeTransaction, status: TrackerStep.COMPLETED });
     } catch (e) {
         setFormError("İşlem onaylanamadı.");
     } finally {

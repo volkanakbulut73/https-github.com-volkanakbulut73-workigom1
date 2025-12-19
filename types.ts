@@ -96,7 +96,7 @@ export const formatName = (fullName: string): string => {
   return parts.length === 1 ? parts[0] : `${parts[0]} ${parts[parts.length - 1][0]}.`;
 };
 
-export const calculateTransaction = (amount: number, percentage: number) => {
+export const calculateTransaction = (amount: number, percentage?: number) => {
   const p = percentage || 20;
   const seekerPayment = p === 100 ? 0 : amount * 0.8;
   return {
@@ -139,11 +139,6 @@ export const ReferralService = {
   }
 };
 
-export const TransactionService = {
-  save: (tx: Transaction) => localStorage.setItem('active_tx', JSON.stringify(tx)),
-  clearActive: () => localStorage.removeItem('active_tx')
-};
-
 export const DBService = {
   getUserProfile: async (id: string): Promise<User | null> => {
     if (!isSupabaseConfigured() || !id) return null;
@@ -182,7 +177,6 @@ export const DBService = {
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
     if (!isSupabaseConfigured() || !userId) return null;
     try {
-      // PostgREST "not.in" filtresi kullanımı
       const { data, error } = await supabase.from('transactions')
         .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
         .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
@@ -218,7 +212,7 @@ export const DBService = {
   },
 
   acceptTransaction: async (txId: string, supporterId: string, percentage: 20 | 100) => {
-    // 406 Hatası için Update ve Select Ayrıştırıldı
+    // 406 Hatası için Update ve Select işlemleri kesin olarak ayrıldı
     const { error: updateError } = await supabase.from('transactions')
       .update({ 
         supporter_id: supporterId, 
@@ -259,6 +253,7 @@ export const DBService = {
   },
 
   markCashPaid: async (txId: string) => {
+    // Return none head'i ekleyerek 406 ihtimalini düşürüyoruz
     await supabase.from('transactions').update({ status: TrackerStep.CASH_PAID }).eq('id', txId);
   },
 

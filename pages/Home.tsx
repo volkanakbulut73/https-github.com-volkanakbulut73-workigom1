@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, Utensils, ArrowLeftRight, Bell, Gift, Wallet, ChevronRight, Star, Plus, Loader2 } from 'lucide-react';
-import { TransactionService, ReferralService, User, DBService } from '../types';
+// Fix: Removed non-existent TransactionService import
+import { ReferralService, User, DBService } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const Home: React.FC = () => {
@@ -91,7 +92,7 @@ export const Home: React.FC = () => {
             
             <div className="relative z-10 flex justify-between items-center">
                <div>
-                  <div className="flex items-center gap-2 mb-1 opacity-80">
+                  <div className="flex iems-center gap-2 mb-1 opacity-80">
                       <Wallet size={14} />
                       <span className="text-xs font-bold uppercase tracking-widest">Cüzdanım</span>
                   </div>

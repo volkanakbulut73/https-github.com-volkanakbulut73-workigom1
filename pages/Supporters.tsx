@@ -4,7 +4,8 @@ import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
 import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet, Info, Check, MapPin, Clock, Star, ShieldCheck, Lock, Zap, Smartphone, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { TrackerStep, Transaction, TransactionService, calculateTransaction, DBService, formatName } from '../types';
+// Fix: Removed non-existent TransactionService import
+import { TrackerStep, Transaction, calculateTransaction, DBService, formatName } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const FILTERS = [
