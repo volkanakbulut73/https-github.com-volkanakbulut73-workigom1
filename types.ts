@@ -90,20 +90,20 @@ export interface Transaction {
   };
 }
 
-// --- Helpers ---
 export const formatName = (fullName: string): string => {
   if (!fullName) return 'Anonim';
   const parts = fullName.trim().split(' ');
   return parts.length === 1 ? parts[0] : `${parts[0]} ${parts[parts.length - 1][0]}.`;
 };
 
-export const calculateTransaction = (amount: number, percentage: 20 | 100) => {
-  const seekerPayment = percentage === 100 ? 0 : amount * 0.8;
+export const calculateTransaction = (amount: number, percentage: number) => {
+  const p = percentage || 20;
+  const seekerPayment = p === 100 ? 0 : amount * 0.8;
   return {
     seekerPayment,
     seekerSavings: amount - seekerPayment,
     supportAmount: amount,
-    refundToSupporter: percentage === 100 ? 0 : seekerPayment - (amount * 0.05)
+    refundToSupporter: p === 100 ? 0 : seekerPayment - (amount * 0.05)
   };
 };
 
@@ -116,7 +116,6 @@ export const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-// --- Services ---
 export const ReferralService = {
   getUserProfile: (): User | null => {
     try {
@@ -164,39 +163,30 @@ export const DBService = {
         referralCode: data.referral_code || 'REF',
         wallet: { balance: data.wallet_balance || 0, totalEarnings: data.total_earnings || 0, pendingBalance: 0 }
       };
-    } catch (e) {
-      console.error("DB Error (Profile):", e);
-      return null;
-    }
+    } catch { return null; }
   },
 
   createTransactionRequest: async (userId: string, amount: number, description: string) => {
-    if (!isSupabaseConfigured()) throw new Error("Bağlantı yok.");
-    try {
-      // 406 Hatalarını önlemek için insert ve select ayrıştırıldı
-      const { data, error } = await supabase.from('transactions').insert({
-        seeker_id: userId,
-        amount,
-        listing_title: description,
-        status: TrackerStep.WAITING_SUPPORTER,
-        support_percentage: 20
-      }).select().single();
-      
-      if (error) throw error;
-      return data;
-    } catch (e: any) {
-      console.error("DB Error (CreateTX):", e);
-      throw e;
-    }
+    if (!isSupabaseConfigured()) throw new Error("Ağ yok.");
+    const { data, error } = await supabase.from('transactions').insert({
+      seeker_id: userId,
+      amount,
+      listing_title: description,
+      status: TrackerStep.WAITING_SUPPORTER,
+      support_percentage: 20
+    }).select().single();
+    if (error) throw error;
+    return data;
   },
 
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
     if (!isSupabaseConfigured() || !userId) return null;
     try {
+      // PostgREST "not.in" filtresi kullanımı
       const { data, error } = await supabase.from('transactions')
         .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
         .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
-        .not('status', 'in', '("dismissed","cancelled","completed","failed")')
+        .filter('status', 'not.in', '(dismissed,cancelled,completed,failed)')
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
 
       if (error || !data) return null;
@@ -219,21 +209,16 @@ export const DBService = {
 
   getPendingTransactions: async () => {
     if (!isSupabaseConfigured()) return [];
-    try {
-      const { data, error } = await supabase.from('transactions')
-        .select(`*, profiles!seeker_id(full_name, avatar_url, location, rating)`)
-        .eq('status', TrackerStep.WAITING_SUPPORTER)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    } catch { return []; }
+    const { data, error } = await supabase.from('transactions')
+      .select(`*, profiles!seeker_id(full_name, avatar_url, location, rating)`)
+      .eq('status', TrackerStep.WAITING_SUPPORTER)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
   },
 
   acceptTransaction: async (txId: string, supporterId: string, percentage: 20 | 100) => {
-    if (!isSupabaseConfigured()) throw new Error("Ağ hatası");
-    
-    // CRITICAL: Supabase 406 hatasını önlemek için update ve select işlemlerini AYIRDIK.
-    // Önce güncelleme yapıyoruz
+    // 406 Hatası için Update ve Select Ayrıştırıldı
     const { error: updateError } = await supabase.from('transactions')
       .update({ 
         supporter_id: supporterId, 
@@ -242,12 +227,8 @@ export const DBService = {
       })
       .eq('id', txId);
       
-    if (updateError) {
-        console.error("Update error (406 check):", updateError);
-        throw updateError;
-    }
+    if (updateError) throw updateError;
 
-    // Güncelleme başarılıysa veriyi ayrıca çekiyoruz
     const { data, error: selectError } = await supabase.from('transactions')
       .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
       .eq('id', txId)
@@ -257,61 +238,44 @@ export const DBService = {
     return data;
   },
 
-  uploadQR: async (_file: File): Promise<string> => {
-    // Gelecekte gerçek depolama için burası güncellenebilir
-    return "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=example-qr-code";
-  },
+  uploadQR: async (_file: File): Promise<string> => "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=workigom-transaction",
 
   submitQR: async (txId: string, qrUrl: string) => {
-    if (!isSupabaseConfigured()) return;
-    const { error } = await supabase.from('transactions').update({ 
+    await supabase.from('transactions').update({ 
       status: TrackerStep.QR_UPLOADED, 
       qr_url: qrUrl 
     }).eq('id', txId);
-    if (error) throw error;
   },
 
   withdrawSupport: async (txId: string) => {
-    if (!isSupabaseConfigured()) return;
-    const { error } = await supabase.from('transactions').update({ 
+    await supabase.from('transactions').update({ 
       status: TrackerStep.WAITING_SUPPORTER, 
       supporter_id: null 
     }).eq('id', txId);
-    if (error) throw error;
   },
 
   dismissTransaction: async (txId: string) => {
-    if (!isSupabaseConfigured()) return;
     await supabase.from('transactions').update({ status: TrackerStep.DISMISSED }).eq('id', txId);
   },
 
   markCashPaid: async (txId: string) => {
-    if (!isSupabaseConfigured()) return;
-    const { error } = await supabase.from('transactions').update({ status: TrackerStep.CASH_PAID }).eq('id', txId);
-    if (error) throw error;
+    await supabase.from('transactions').update({ status: TrackerStep.CASH_PAID }).eq('id', txId);
   },
 
   completeTransaction: async (txId: string) => {
-    if (!isSupabaseConfigured()) return;
-    const { error } = await supabase.from('transactions').update({ 
+    await supabase.from('transactions').update({ 
       status: TrackerStep.COMPLETED, 
       completed_at: new Date().toISOString() 
     }).eq('id', txId);
-    if (error) throw error;
   },
 
   cancelTransaction: async (txId: string) => {
-    if (!isSupabaseConfigured()) return;
-    const { error } = await supabase.from('transactions').delete().eq('id', txId);
-    if (error) throw error;
+    await supabase.from('transactions').delete().eq('id', txId);
   },
 
-  uploadAvatar: async (_file: File): Promise<string> => {
-    return "https://picsum.photos/200";
-  },
+  uploadAvatar: async (_file: File): Promise<string> => "https://picsum.photos/200",
 
   updateUserProfile: async (id: string, updates: { name: string, location: string, avatar: string }) => {
-    if (!isSupabaseConfigured()) return;
     const { error } = await supabase.from('profiles').update({
       full_name: updates.name,
       location: updates.location,
@@ -329,44 +293,39 @@ export const DBService = {
 export const SwapService = {
   getListings: async (): Promise<SwapListing[]> => {
     if (!isSupabaseConfigured()) return [];
-    try {
-      const { data, error } = await supabase.from('swap_listings').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []).map((item: any) => ({
-        id: item.id,
-        title: item.title,
-        description: item.description,
-        requiredBalance: item.required_balance,
-        photoUrl: item.photo_url,
-        ownerId: item.owner_id,
-        ownerName: item.owner_name,
-        ownerAvatar: item.owner_avatar,
-        location: item.location,
-        createdAt: item.created_at
-      }));
-    } catch { return []; }
+    const { data, error } = await supabase.from('swap_listings').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map((item: any) => ({
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      requiredBalance: item.required_balance,
+      photoUrl: item.photo_url,
+      ownerId: item.owner_id,
+      ownerName: item.owner_name,
+      ownerAvatar: item.owner_avatar,
+      location: item.location,
+      createdAt: item.created_at
+    }));
   },
   getListingById: async (id: string): Promise<SwapListing | null> => {
     if (!isSupabaseConfigured()) return null;
-    try {
-      const { data, error } = await supabase.from('swap_listings').select('*').eq('id', id).maybeSingle();
-      if (error || !data) return null;
-      return {
-        id: data.id,
-        title: data.title,
-        description: data.description,
-        requiredBalance: data.required_balance,
-        photoUrl: data.photo_url,
-        ownerId: data.owner_id,
-        ownerName: data.owner_name,
-        ownerAvatar: data.owner_avatar,
-        location: data.location,
-        createdAt: data.created_at
-      };
-    } catch { return null; }
+    const { data, error } = await supabase.from('swap_listings').select('*').eq('id', id).maybeSingle();
+    if (error || !data) return null;
+    return {
+      id: data.id,
+      title: data.title,
+      description: data.description,
+      requiredBalance: data.required_balance,
+      photoUrl: data.photo_url,
+      ownerId: data.owner_id,
+      ownerName: data.owner_name,
+      ownerAvatar: data.owner_avatar,
+      location: data.location,
+      createdAt: data.created_at
+    };
   },
   createListing: async (title: string, description: string, price: number, photoUrl: string) => {
-    if (!isSupabaseConfigured()) return;
     const user = ReferralService.getUserProfile();
     if (!user) return;
     const { error } = await supabase.from('swap_listings').insert({
@@ -382,11 +341,7 @@ export const SwapService = {
     if (error) throw error;
   },
   deleteListing: async (id: string) => {
-    if (!isSupabaseConfigured()) return;
-    const { error } = await supabase.from('swap_listings').delete().eq('id', id);
-    if (error) throw error;
+    await supabase.from('swap_listings').delete().eq('id', id);
   },
-  uploadImage: async (_file: File): Promise<string> => {
-    return "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500";
-  }
+  uploadImage: async (_file: File): Promise<string> => "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500"
 };
