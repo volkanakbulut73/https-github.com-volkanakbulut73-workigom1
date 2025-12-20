@@ -4,7 +4,6 @@ import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
 import { QrCode, X, Crown, Heart, Utensils, ShoppingBag, ChevronLeft, Loader2, CheckCircle2, MessageCircle, ArrowRight, XCircle, Home, UploadCloud, Wallet, Info, Check, MapPin, Clock, Star, ShieldCheck, Lock, Zap, Smartphone, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-// Fix: Removed non-existent TransactionService import
 import { TrackerStep, Transaction, calculateTransaction, DBService, formatName } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -330,9 +329,10 @@ export const Supporters: React.FC = () => {
                     <Tracker 
                         currentStep={activeTransaction.status} 
                         steps={[
-                            { id: TrackerStep.WAITING_CASH_PAYMENT, label: 'Ödeme' },
-                            { id: TrackerStep.CASH_PAID, label: 'QR Hazırla' },
-                            { id: TrackerStep.QR_UPLOADED, label: 'QR Yüklendi' }, 
+                            { id: TrackerStep.WAITING_SUPPORTER, label: 'Eşleşme' },
+                            { id: TrackerStep.WAITING_CASH_PAYMENT, label: 'Ödeme Bekleniyor' },
+                            { id: TrackerStep.CASH_PAID, label: 'QR Hazırlanıyor' },
+                            { id: TrackerStep.QR_UPLOADED, label: 'QR Paylaşıldı' }, 
                             { id: TrackerStep.COMPLETED, label: 'Tamamlandı' }
                         ]} 
                     />
