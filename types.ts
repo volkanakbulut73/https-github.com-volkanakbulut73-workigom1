@@ -183,13 +183,14 @@ export const DBService = {
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
     if (!isSupabaseConfigured() || !userId) return null;
     try {
-      // Sadece 'dismissed' (UI'dan silinmiş) olanları getirme. 
-      // 'completed' olanları UI'da başarı ekranı için getirmeye devam etmeliyiz.
+      // Terminal durumlar (Dismissed) dışındaki en yeni aktif işlemi getir
       const { data, error } = await supabase.from('transactions')
         .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
         .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
         .neq('status', TrackerStep.DISMISSED)
-        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (error || !data) return null;
       return mapDBTransaction(data);
@@ -207,6 +208,7 @@ export const DBService = {
   },
 
   acceptTransaction: async (txId: string, supporterId: string, percentage: 20 | 100) => {
+    // 406 Hatasını önlemek için update ve select adımlarını kesin ayırdık
     const { error: updateError } = await supabase.from('transactions')
       .update({ 
         supporter_id: supporterId, 
@@ -334,7 +336,6 @@ export const SwapService = {
   uploadImage: async (_file: File): Promise<string> => "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500"
 };
 
-// Helper to convert File to Base64 string for previews and uploads
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

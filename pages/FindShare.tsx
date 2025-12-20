@@ -28,13 +28,13 @@ export const FindShare: React.FC = () => {
             const tx = await DBService.getActiveTransaction(session.user.id);
             if (tx) {
                 setActiveTransaction(prev => {
+                    // Durum veya destekçi değiştiyse anında güncelle
                     if (!prev || prev.status !== tx.status || prev.supporterId !== tx.supporterId || prev.qrUrl !== tx.qrUrl) {
                         return tx;
                     }
                     return prev;
                 });
             } else if (activeTransaction && activeTransaction.status !== TrackerStep.COMPLETED) {
-                // Eğer işlem sessizce silindiyse veya UI'dan düşmeliyse
                 setActiveTransaction(null);
             }
         }
@@ -47,14 +47,14 @@ export const FindShare: React.FC = () => {
 
   useEffect(() => {
     fetchCurrentStatus();
-    pollIntervalRef.current = setInterval(() => fetchCurrentStatus(true), 10000);
+    // 3 saniyede bir kontrol (Gecikmeyi önlemek için daha agresif polling)
+    pollIntervalRef.current = setInterval(() => fetchCurrentStatus(true), 3000);
     return () => clearInterval(pollIntervalRef.current);
   }, []);
 
   useEffect(() => {
     if (!activeTransaction?.id || !isSupabaseConfigured()) return;
 
-    // Tamamlanmış işlemler için Realtime aboneliği kapatılabilir
     if (activeTransaction.status === TrackerStep.COMPLETED || 
         activeTransaction.status === TrackerStep.DISMISSED ||
         activeTransaction.status === TrackerStep.CANCELLED) return;
@@ -71,7 +71,6 @@ export const FindShare: React.FC = () => {
             if (newData) {
                 setActiveTransaction(prev => {
                     if (!prev) return null;
-                    // Snake_case'den CamelCase'e güvenli dönüşüm
                     return {
                         ...prev,
                         status: newData.status as TrackerStep,

@@ -53,9 +53,10 @@ export const Supporters: React.FC = () => {
     };
     init();
 
+    // 3 saniyede bir veri yenileme (Daha agresif akış takibi)
     const interval = setInterval(() => {
         if(mounted) fetchData(true);
-    }, 15000); 
+    }, 3000); 
 
     return () => {
         mounted = false;
@@ -102,7 +103,8 @@ export const Supporters: React.FC = () => {
            const activeTx = await DBService.getActiveTransaction(currentUser.id);
            if (activeTx && activeTx.supporterId === currentUser.id) {
                setActiveTransaction(activeTx);
-               if (activeTab === 'all' && activeTx.status !== TrackerStep.DISMISSED) {
+               // Eğer aktif bir destek işlemimiz varsa ve terminal durumda değilse bu taba geç
+               if (activeTab === 'all' && activeTx.status !== TrackerStep.DISMISSED && activeTx.status !== TrackerStep.COMPLETED) {
                   setActiveTab('my-support');
                }
            } else if (!activeTx) {
@@ -149,7 +151,7 @@ export const Supporters: React.FC = () => {
 
         const updated = await DBService.acceptTransaction(selectedListing.id, user.id, selectedPercentage);
         
-        if (!updated) throw new Error("İşlem verisi alınamadı.");
+        if (!updated) throw new Error("İşlem kabul edildi ancak veri okunamadı.");
 
         const realTx: Transaction = {
           id: updated.id,
@@ -157,7 +159,7 @@ export const Supporters: React.FC = () => {
           supporterId: user.id,
           amount: updated.amount,
           listingTitle: updated.listing_title,
-          status: updated.status,
+          status: updated.status as TrackerStep,
           supportPercentage: updated.support_percentage,
           createdAt: updated.created_at,
           seekerName: selectedListing.name,
@@ -168,15 +170,11 @@ export const Supporters: React.FC = () => {
         setActiveTransaction(realTx);
         setActiveTab('my-support');
         setShowSelectionModal(false);
+        // Sayfayı zorla yenileme yerine sessiz fetch tetikleyelim
+        fetchData(true);
     } catch (err: any) {
         console.error("Support acceptance error:", err);
-        let msg = "İşlem kabul edilemedi. Lütfen bağlantınızı kontrol edin.";
-        if (err.message && err.message.includes("406")) {
-            msg = "Sunucu yetkilendirme hatası (406). Lütfen sayfayı yenileyip tekrar deneyin.";
-        } else if (err.message) {
-            msg = err.message;
-        }
-        setErrorMsg(msg);
+        setErrorMsg(err.message || "İşlem başarısız.");
     } finally {
         setIsProcessing(false);
     }
@@ -354,6 +352,10 @@ export const Supporters: React.FC = () => {
                              <div className="animate-fade-in text-center space-y-4">
                                 <div className="p-4 bg-emerald-50 rounded-2xl text-emerald-700 text-xs font-bold border border-emerald-100">
                                     İşlem başarıyla tamamlandı! Teşekkürler.
+                                </div>
+                                <div className="p-4 bg-emerald-50 rounded-2xl mb-4">
+                                    <p className="text-sm font-bold text-emerald-800">Tebrikler! 🎉</p>
+                                    <p className="text-xs text-emerald-600">Bakiyeniz nakit olarak cüzdanınıza aktarıldı.</p>
                                 </div>
                                 <Button fullWidth onClick={handleDismissTransaction} className="bg-emerald-500 py-4">İşlemi Kapat</Button>
                              </div>

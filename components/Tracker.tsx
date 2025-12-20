@@ -17,7 +17,7 @@ interface TrackerProps {
 
 export const Tracker: React.FC<TrackerProps> = ({ currentStep, steps }) => {
   const getStepState = (stepId: TrackerStep) => {
-    // İşlem akış sırası (Realtime veritabanı ile uyumlu)
+    // Veritabanındaki ana akış sırası
     const statusOrder = [
       TrackerStep.WAITING_SUPPORTER,
       TrackerStep.WAITING_CASH_PAYMENT,
@@ -26,7 +26,7 @@ export const Tracker: React.FC<TrackerProps> = ({ currentStep, steps }) => {
       TrackerStep.COMPLETED
     ];
     
-    // Hata veya İptal durumları kontrolü
+    // Hata veya İptal durumlarında özel görsel tepki
     if (currentStep === TrackerStep.FAILED || currentStep === TrackerStep.CANCELLED) {
       return stepId === currentStep ? 'error' : 'pending';
     }
@@ -47,10 +47,10 @@ export const Tracker: React.FC<TrackerProps> = ({ currentStep, steps }) => {
         
         return (
           <div key={step.id} className="relative pl-8 group">
-            {/* Adım Göstergesi (Dot) */}
+            {/* Durum İndikatörü (Mobil Pulse Ring Efekti) */}
             <div className={`absolute -left-[23px] top-0 rounded-full p-1.5 border-2 transition-all duration-500 z-10
               ${state === 'completed' ? 'bg-emerald-500 border-emerald-500 shadow-lg shadow-emerald-500/20' : 
-                state === 'active' ? 'bg-white border-slate-900 ring-4 ring-slate-900/10' : 
+                state === 'active' ? 'bg-white border-slate-900 ring-4 ring-slate-900/10 scale-110' : 
                 state === 'error' ? 'bg-red-500 border-red-500 shadow-lg shadow-red-500/20' : 'bg-white border-gray-200'}
             `}>
               {state === 'completed' ? (
@@ -64,11 +64,11 @@ export const Tracker: React.FC<TrackerProps> = ({ currentStep, steps }) => {
               )}
             </div>
 
-            {/* İçerik Kartı */}
-            <div className={`transition-all duration-500 ${state === 'pending' ? 'opacity-40 blur-[0.3px]' : 'opacity-100'}`}>
+            {/* İçerik Bloğu */}
+            <div className={`transition-all duration-500 ${state === 'pending' ? 'opacity-30 blur-[0.3px]' : 'opacity-100'}`}>
               <div className="flex justify-between items-start">
                 <div>
-                  <h4 className={`font-black text-sm tracking-tight ${state === 'active' ? 'text-slate-900 scale-105 origin-left' : state === 'error' ? 'text-red-600' : 'text-gray-800'} transition-transform`}>
+                  <h4 className={`font-black text-sm tracking-tight transition-colors ${state === 'active' ? 'text-slate-900' : state === 'error' ? 'text-red-600' : 'text-gray-800'}`}>
                     {step.label}
                   </h4>
                   {step.description && (
@@ -86,8 +86,8 @@ export const Tracker: React.FC<TrackerProps> = ({ currentStep, steps }) => {
               </div>
               
               {state === 'active' && (
-                <div className="mt-3 inline-flex items-center gap-1.5 bg-slate-900 text-white text-[9px] font-black px-2.5 py-1 rounded-full shadow-lg shadow-slate-900/20 animate-bounce uppercase tracking-widest">
-                  <div className="w-1 h-1 bg-emerald-400 rounded-full animate-ping"></div>
+                <div className="mt-3 inline-flex items-center gap-1.5 bg-slate-900 text-white text-[9px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-slate-900/20 animate-bounce uppercase tracking-widest">
+                  <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></div>
                   İşlem Sırası
                 </div>
               )}
