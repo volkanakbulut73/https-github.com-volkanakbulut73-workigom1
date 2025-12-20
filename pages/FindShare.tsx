@@ -4,8 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Wallet, Clock, Star, Loader2, Info, XCircle, Home, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Tracker } from '../components/Tracker';
-// Fix: Removed non-existent TransactionService import
-import { Transaction, TrackerStep, ReferralService, User, DBService, calculateTransaction, formatName } from '../types';
+import { Transaction, TrackerStep, ReferralService, User, DBService, calculateTransaction, formatName, mapDBTransaction } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const FindShare: React.FC = () => {
@@ -28,14 +27,14 @@ export const FindShare: React.FC = () => {
         if (session?.user) {
             const tx = await DBService.getActiveTransaction(session.user.id);
             if (tx) {
-                // Sadece durum değiştiyse veya yeni oluştuysa state güncelle (re-render optimizasyonu)
                 setActiveTransaction(prev => {
-                    if (!prev || prev.status !== tx.status || prev.supporterId !== tx.supporterId) {
+                    if (!prev || prev.status !== tx.status || prev.supporterId !== tx.supporterId || prev.qrUrl !== tx.qrUrl) {
                         return tx;
                     }
                     return prev;
                 });
-            } else if (activeTransaction) {
+            } else if (activeTransaction && activeTransaction.status !== TrackerStep.COMPLETED) {
+                // Eğer işlem sessizce silindiyse veya UI'dan düşmeliyse
                 setActiveTransaction(null);
             }
         }
@@ -48,47 +47,43 @@ export const FindShare: React.FC = () => {
 
   useEffect(() => {
     fetchCurrentStatus();
-    // Realtime bağlantısı kopsa bile her 5 saniyede bir kontrol et (Daha agresif polling)
-    pollIntervalRef.current = setInterval(() => fetchCurrentStatus(true), 5000);
+    pollIntervalRef.current = setInterval(() => fetchCurrentStatus(true), 10000);
     return () => clearInterval(pollIntervalRef.current);
   }, []);
 
   useEffect(() => {
     if (!activeTransaction?.id || !isSupabaseConfigured()) return;
 
+    // Tamamlanmış işlemler için Realtime aboneliği kapatılabilir
     if (activeTransaction.status === TrackerStep.COMPLETED || 
-        activeTransaction.status === TrackerStep.CANCELLED ||
-        activeTransaction.status === TrackerStep.DISMISSED) return;
+        activeTransaction.status === TrackerStep.DISMISSED ||
+        activeTransaction.status === TrackerStep.CANCELLED) return;
 
-    // Realtime aboneliği - transactions tablosundaki spesifik satırı izle
-    const channel = supabase.channel(`tx_view_${activeTransaction.id}`)
+    const channel = supabase.channel(`tx_realtime_${activeTransaction.id}`)
         .on('postgres_changes', { 
             event: 'UPDATE', 
             schema: 'public', 
             table: 'transactions',
             filter: `id=eq.${activeTransaction.id}`
         }, (payload: any) => {
+            console.log("Realtime Update Received:", payload.new);
             const newData = payload.new;
             if (newData) {
                 setActiveTransaction(prev => {
                     if (!prev) return null;
-                    // Mevcut state'deki isimleri koruyarak sadece dinamik alanları güncelle
+                    // Snake_case'den CamelCase'e güvenli dönüşüm
                     return {
                         ...prev,
                         status: newData.status as TrackerStep,
                         supporterId: newData.supporter_id,
-                        supportPercentage: newData.support_percentage,
+                        supportPercentage: newData.support_percentage || 20,
                         qrUrl: newData.qr_url,
                         amounts: calculateTransaction(newData.amount, newData.support_percentage)
                     };
                 });
             }
         })
-        .subscribe((status: string) => {
-            if (status === 'SUBSCRIBED') {
-                console.debug("Realtime tracking active for:", activeTransaction.id);
-            }
-        });
+        .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [activeTransaction?.id]); 
@@ -100,7 +95,6 @@ export const FindShare: React.FC = () => {
 
     try {
       if (!isSupabaseConfigured()) throw new Error("Ağ hatası.");
-      
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) throw new Error("Giriş yapmalısınız.");
 
@@ -108,22 +102,9 @@ export const FindShare: React.FC = () => {
       if (isNaN(val) || val < 50) throw new Error("Minimum 50 TL giriniz.");
 
       const newTxData = await DBService.createTransactionRequest(session.user.id, val, description);
-      
-      const realTx: Transaction = {
-          id: newTxData.id,
-          seekerId: session.user.id,
-          amount: val,
-          listingTitle: description,
-          status: TrackerStep.WAITING_SUPPORTER,
-          supportPercentage: 20,
-          amounts: calculateTransaction(val, 20),
-          createdAt: newTxData.created_at,
-          seekerName: 'Ben'
-      };
-
+      const realTx = mapDBTransaction(newTxData);
       setActiveTransaction(realTx);
       setDescription('');
-      
     } catch (error: any) {
       setFormError(error.message || "İşlem başlatılamadı.");
     } finally {
@@ -136,7 +117,6 @@ export const FindShare: React.FC = () => {
     setLoading(true);
     try {
         await DBService.markCashPaid(activeTransaction.id);
-        // Onay sonrası state'i anında güncelle (Realtime beklemeden UI tepki versin)
         setActiveTransaction({ ...activeTransaction, status: TrackerStep.CASH_PAID });
     } catch (e) {
         setFormError("Onay verilemedi.");
@@ -169,6 +149,16 @@ export const FindShare: React.FC = () => {
         setFormError("İptal başarısız."); 
     } finally { 
         setLoading(false); 
+    }
+  };
+
+  const handleDismiss = async () => {
+    if (!activeTransaction) return;
+    try {
+        await DBService.dismissTransaction(activeTransaction.id);
+        setActiveTransaction(null);
+    } catch (e) {
+        setActiveTransaction(null);
     }
   };
 
@@ -231,7 +221,7 @@ export const FindShare: React.FC = () => {
             )}
 
             {activeTransaction.status === TrackerStep.QR_UPLOADED && activeTransaction.qrUrl && (
-                <div className="bg-white p-6 rounded-[2rem] shadow-xl text-center space-y-4 border-2 border-emerald-500/10">
+                <div className="bg-white p-6 rounded-[2rem] shadow-xl text-center space-y-4 border-2 border-emerald-500/10 animate-fade-in">
                     <div className="p-4 bg-emerald-50 rounded-2xl inline-block mb-2">
                         <img src={activeTransaction.qrUrl} className="w-48 h-48 mx-auto rounded-xl" alt="QR"/>
                     </div>
@@ -240,8 +230,8 @@ export const FindShare: React.FC = () => {
                         <p className="text-xs text-gray-500 px-6">Bu kodu kasada okutun ve işlem bittiğinde onaylayın.</p>
                     </div>
                     <div className="flex gap-2 pt-2">
-                        <Button fullWidth variant="danger" className="py-3" onClick={() => alert("Hata bildiriminiz iletildi.")}>Hata</Button>
-                        <Button fullWidth variant="success" className="py-3 shadow-lg shadow-emerald-500/20" onClick={handlePaymentSuccess}>Tamamla</Button>
+                        <Button fullWidth variant="danger" className="py-3" onClick={() => alert("Hata bildirimi iletildi.")}>Hata Bildir</Button>
+                        <Button fullWidth variant="success" className="py-3 shadow-lg shadow-emerald-500/20" onClick={handlePaymentSuccess}>Onayla ve Bitir</Button>
                     </div>
                 </div>
             )}
@@ -251,15 +241,15 @@ export const FindShare: React.FC = () => {
                     <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Star className="text-emerald-500 fill-emerald-500" size={40}/>
                     </div>
-                    <h2 className="text-xl font-black text-slate-900 mb-2">Başarılı! 🎉</h2>
-                    <p className="text-sm text-gray-500 mb-6">Tasarrufunuz cüzdanınıza yansıdı.</p>
-                    <Button fullWidth onClick={() => setActiveTransaction(null)} className="py-4">Kapat</Button>
+                    <h2 className="text-xl font-black text-slate-900 mb-2">Harika! 🎉</h2>
+                    <p className="text-sm text-gray-500 mb-6">Ödeme başarıyla tamamlandı. Tasarrufunuz cüzdanınıza yansıtıldı.</p>
+                    <Button fullWidth onClick={handleDismiss} className="py-4">Kapat</Button>
                 </div>
             )}
 
             {(activeTransaction.status !== TrackerStep.COMPLETED && activeTransaction.status !== TrackerStep.QR_UPLOADED) && (
                 <div className="pt-4">
-                    <button onClick={handleCancelTransaction} className="w-full text-red-500 text-xs font-bold py-4 hover:bg-red-50 rounded-2xl transition-colors">İptal Et</button>
+                    <button onClick={handleCancelTransaction} className="w-full text-red-500 text-xs font-bold py-4 hover:bg-red-50 rounded-2xl transition-colors">İşlemi İptal Et</button>
                 </div>
             )}
         </div>
@@ -274,7 +264,7 @@ export const FindShare: React.FC = () => {
             <button onClick={() => navigate(-1)} className="w-8 h-8 flex items-center justify-center bg-white/10 rounded-full hover:bg-white/20 transition-colors">
                 <ChevronLeft size={16} className="text-white" />
             </button>
-            <h1 className="text-sm font-bold tracking-wide">Paylaşım Talebi Oluştur</h1>
+            <h1 className="text-sm font-bold tracking-wide">Yeni Paylaşım Talebi</h1>
          </div>
       </div>
 
@@ -289,7 +279,7 @@ export const FindShare: React.FC = () => {
               )}
 
               <div>
-                  <label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Harcama Tutarı</label>
+                  <label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Restoran Ödemesi Tutarı</label>
                   <div className="relative mt-1">
                     <input 
                         type="number" 
@@ -300,20 +290,21 @@ export const FindShare: React.FC = () => {
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-slate-300 text-xl">₺</span>
                   </div>
+                  <p className="text-[10px] text-emerald-600 font-bold mt-2 ml-1">İndirimli Ödeyeceğiniz: ₺{(parseFloat(amount) * 0.8 || 0).toFixed(0)}</p>
               </div>
 
               <div>
-                  <label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Açıklama</label>
+                  <label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Kısa Açıklama</label>
                   <textarea 
                      value={description}
                      onChange={(e) => setDescription(e.target.value)}
                      className="w-full mt-1 bg-gray-50 rounded-xl p-4 text-sm font-medium h-24 resize-none outline-none focus:ring-2 focus:ring-slate-900 transition-all"
-                     placeholder="Restoran adı veya bölge..."
+                     placeholder="Örn: Kadıköy'de bir restoranda hesap ödeyeceğim."
                   />
               </div>
 
               <Button fullWidth onClick={handleCreateRequest} disabled={creating} className="py-4 text-sm shadow-xl shadow-slate-900/10">
-                  {creating ? <Loader2 className="animate-spin" /> : 'Talebi Yayınla'}
+                  {creating ? <Loader2 className="animate-spin" /> : 'Paylaşım Talebi Oluştur'}
               </Button>
            </div>
         </div>

@@ -107,14 +107,20 @@ export const calculateTransaction = (amount: number, percentage?: number) => {
   };
 };
 
-export const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
-  });
-};
+export const mapDBTransaction = (dbItem: any): Transaction => ({
+  id: dbItem.id,
+  seekerId: dbItem.seeker_id,
+  supporterId: dbItem.supporter_id,
+  amount: dbItem.amount,
+  listingTitle: dbItem.listing_title,
+  status: dbItem.status as TrackerStep,
+  supportPercentage: dbItem.support_percentage || 20,
+  qrUrl: dbItem.qr_url,
+  createdAt: dbItem.created_at,
+  seekerName: dbItem.seeker?.full_name ? formatName(dbItem.seeker.full_name) : 'Alıcı',
+  supporterName: dbItem.supporter?.full_name ? formatName(dbItem.supporter.full_name) : undefined,
+  amounts: calculateTransaction(dbItem.amount, dbItem.support_percentage)
+});
 
 export const ReferralService = {
   getUserProfile: (): User | null => {
@@ -177,27 +183,16 @@ export const DBService = {
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
     if (!isSupabaseConfigured() || !userId) return null;
     try {
+      // Sadece 'dismissed' (UI'dan silinmiş) olanları getirme. 
+      // 'completed' olanları UI'da başarı ekranı için getirmeye devam etmeliyiz.
       const { data, error } = await supabase.from('transactions')
         .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
         .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
-        .filter('status', 'not.in', '(dismissed,cancelled,completed,failed)')
+        .neq('status', TrackerStep.DISMISSED)
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
 
       if (error || !data) return null;
-      return {
-        id: data.id,
-        seekerId: data.seeker_id,
-        supporterId: data.supporter_id,
-        amount: data.amount,
-        listingTitle: data.listing_title,
-        status: data.status as TrackerStep,
-        supportPercentage: data.support_percentage,
-        qrUrl: data.qr_url,
-        createdAt: data.created_at,
-        seekerName: formatName(data.seeker?.full_name),
-        supporterName: data.supporter ? formatName(data.supporter.full_name) : undefined,
-        amounts: calculateTransaction(data.amount, data.support_percentage)
-      };
+      return mapDBTransaction(data);
     } catch { return null; }
   },
 
@@ -212,7 +207,6 @@ export const DBService = {
   },
 
   acceptTransaction: async (txId: string, supporterId: string, percentage: 20 | 100) => {
-    // 406 Hatası için Update ve Select işlemleri kesin olarak ayrıldı
     const { error: updateError } = await supabase.from('transactions')
       .update({ 
         supporter_id: supporterId, 
@@ -253,7 +247,6 @@ export const DBService = {
   },
 
   markCashPaid: async (txId: string) => {
-    // Return none head'i ekleyerek 406 ihtimalini düşürüyoruz
     await supabase.from('transactions').update({ status: TrackerStep.CASH_PAID }).eq('id', txId);
   },
 
@@ -265,7 +258,7 @@ export const DBService = {
   },
 
   cancelTransaction: async (txId: string) => {
-    await supabase.from('transactions').delete().eq('id', txId);
+    await supabase.from('transactions').update({ status: TrackerStep.CANCELLED }).eq('id', txId);
   },
 
   uploadAvatar: async (_file: File): Promise<string> => "https://picsum.photos/200",
@@ -339,4 +332,14 @@ export const SwapService = {
     await supabase.from('swap_listings').delete().eq('id', id);
   },
   uploadImage: async (_file: File): Promise<string> => "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500"
+};
+
+// Helper to convert File to Base64 string for previews and uploads
+export const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
 };
