@@ -42,6 +42,8 @@ export const Supporters: React.FC = () => {
   const [qrUploading, setQrUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
+  // Race condition önleyici kilit
+  const ignoreNextFetchRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -53,36 +55,32 @@ export const Supporters: React.FC = () => {
     };
     init();
 
-    // 3 saniyede bir veri yenileme (Daha agresif akış takibi)
     const interval = setInterval(() => {
-        if(mounted) fetchData(true);
+        if(mounted && !isProcessing && !ignoreNextFetchRef.current) {
+            fetchData(true);
+        }
     }, 3000); 
 
     return () => {
         mounted = false;
         clearInterval(interval);
     };
-  }, []);
+  }, [isProcessing]);
 
   const fetchData = async (silent = false) => {
-    if (!isSupabaseConfigured()) {
-       setListings([]);
-       if (!silent) setLoading(false);
-       return;
-    }
-
+    if (!isSupabaseConfigured()) return;
     if (!silent) setLoading(true);
 
     try {
         const { data: { session } } = await supabase.auth.getSession();
         const currentUser = session?.user;
+        if (!currentUser) return;
         
+        // 1. Bekleyen ilanları çek
         const rawData = await DBService.getPendingTransactions();
-        
         const mappedListings: UIListing[] = rawData.map((item: any) => {
             const profile = item.profiles || item.seeker || {};
-            const isOwn = currentUser && item.seeker_id === currentUser.id;
-
+            const isOwn = item.seeker_id === currentUser.id;
             return {
               id: item.id,
               name: formatName(profile.full_name || 'Alıcı'),
@@ -96,20 +94,19 @@ export const Supporters: React.FC = () => {
               isOwn: isOwn
             };
         });
-        
         setListings(mappedListings);
 
-        if (currentUser) {
-           const activeTx = await DBService.getActiveTransaction(currentUser.id);
-           if (activeTx && activeTx.supporterId === currentUser.id) {
-               setActiveTransaction(activeTx);
-               // Eğer aktif bir destek işlemimiz varsa ve terminal durumda değilse bu taba geç
-               if (activeTab === 'all' && activeTx.status !== TrackerStep.DISMISSED && activeTx.status !== TrackerStep.COMPLETED) {
-                  setActiveTab('my-support');
-               }
-           } else if (!activeTx) {
-               setActiveTransaction(null);
-           }
+        // 2. Aktif işlemi çek (Race condition kilidi yoksa)
+        if (!ignoreNextFetchRef.current) {
+            const activeTx = await DBService.getActiveTransaction(currentUser.id);
+            // Sadece bizim destekçi olduğumuz işlemleri Supporters sayfasında gösteriyoruz
+            if (activeTx && activeTx.supporterId === currentUser.id) {
+                setActiveTransaction(activeTx);
+            } else if (!activeTx && activeTransaction) {
+                // Eğer localde aktif işlem varken servisten null dönerse (ve kilit yoksa)
+                // Bu işlemin kapandığını veya terminal duruma geçtiğini gösterir
+                setActiveTransaction(null);
+            }
         }
     } catch (e) {
         console.error("fetchData error:", e);
@@ -128,10 +125,9 @@ export const Supporters: React.FC = () => {
     if (activeTransaction && 
         activeTransaction.status !== TrackerStep.COMPLETED && 
         activeTransaction.status !== TrackerStep.DISMISSED && 
-        activeTransaction.status !== TrackerStep.CANCELLED && 
-        activeTransaction.status !== TrackerStep.FAILED) {
+        activeTransaction.status !== TrackerStep.CANCELLED) {
       
-      alert("Zaten devam eden bir işleminiz var. Lütfen önce onu tamamlayın.");
+      alert("Zaten devam eden bir işleminiz var.");
       setActiveTab('my-support');
       return;
     }
@@ -144,6 +140,7 @@ export const Supporters: React.FC = () => {
     if (!selectedListing || isProcessing) return;
     setIsProcessing(true);
     setErrorMsg(null);
+    ignoreNextFetchRef.current = true; // KİLİDİ AÇ: fetchData'nın durumu ezmesini engelle
 
     try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -151,7 +148,7 @@ export const Supporters: React.FC = () => {
 
         const updated = await DBService.acceptTransaction(selectedListing.id, user.id, selectedPercentage);
         
-        if (!updated) throw new Error("İşlem kabul edildi ancak veri okunamadı.");
+        if (!updated) throw new Error("İşlem verisi alınamadı.");
 
         const realTx: Transaction = {
           id: updated.id,
@@ -167,14 +164,20 @@ export const Supporters: React.FC = () => {
           amounts: calculateTransaction(updated.amount, updated.support_percentage)
         };
 
+        // Local state'i hemen güncelle
         setActiveTransaction(realTx);
         setActiveTab('my-support');
         setShowSelectionModal(false);
-        // Sayfayı zorla yenileme yerine sessiz fetch tetikleyelim
-        fetchData(true);
+
+        // 5 saniye sonra kilidi kaldır (Supabase'in kendine gelmesi için yeterli süre)
+        setTimeout(() => {
+            ignoreNextFetchRef.current = false;
+        }, 5000);
+
     } catch (err: any) {
         console.error("Support acceptance error:", err);
         setErrorMsg(err.message || "İşlem başarısız.");
+        ignoreNextFetchRef.current = false; // Hata durumunda kilidi hemen kaldır
     } finally {
         setIsProcessing(false);
     }
@@ -200,7 +203,7 @@ export const Supporters: React.FC = () => {
         await DBService.withdrawSupport(activeTransaction.id);
         setActiveTransaction(null);
         setActiveTab('all');
-        fetchData();
+        fetchData(true);
     } catch (e) { alert("Hata oluştu."); }
   };
 
@@ -209,7 +212,7 @@ export const Supporters: React.FC = () => {
          if (activeTransaction) await DBService.dismissTransaction(activeTransaction.id);
          setActiveTransaction(null);
          setActiveTab('all');
-         fetchData();
+         fetchData(true);
      } catch (e) {
          setActiveTransaction(null);
      }

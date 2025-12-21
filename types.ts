@@ -183,7 +183,6 @@ export const DBService = {
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
     if (!isSupabaseConfigured() || !userId) return null;
     try {
-      // Terminal durumlar (Dismissed) dışındaki en yeni aktif işlemi getir
       const { data, error } = await supabase.from('transactions')
         .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
         .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
@@ -208,17 +207,26 @@ export const DBService = {
   },
 
   acceptTransaction: async (txId: string, supporterId: string, percentage: 20 | 100) => {
-    // 406 Hatasını önlemek için update ve select adımlarını kesin ayırdık
-    const { error: updateError } = await supabase.from('transactions')
+    // RLS kısıtlamalarına karşı update işlemini hata kontrolüyle yapıyoruz
+    const { data: updateData, error: updateError } = await supabase.from('transactions')
       .update({ 
         supporter_id: supporterId, 
         status: TrackerStep.WAITING_CASH_PAYMENT,
         support_percentage: percentage
       })
-      .eq('id', txId);
+      .eq('id', txId)
+      .eq('status', TrackerStep.WAITING_SUPPORTER) // Sadece hala bekleyen ilanları alabilmek için
+      .select()
+      .single();
       
-    if (updateError) throw updateError;
+    if (updateError) {
+        console.error("Accept Update Error:", updateError);
+        throw new Error(updateError.message === "JSON object requested, but no rows were returned" 
+            ? "Bu ilan başka bir destekçi tarafından alınmış olabilir." 
+            : "İlan kabul edilemedi: RLS veya Bağlantı Hatası.");
+    }
 
+    // İlişkili dataları çek (Seeker/Supporter isimleri için)
     const { data, error: selectError } = await supabase.from('transactions')
       .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
       .eq('id', txId)
@@ -231,17 +239,19 @@ export const DBService = {
   uploadQR: async (_file: File): Promise<string> => "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=workigom-transaction",
 
   submitQR: async (txId: string, qrUrl: string) => {
-    await supabase.from('transactions').update({ 
+    const { error } = await supabase.from('transactions').update({ 
       status: TrackerStep.QR_UPLOADED, 
       qr_url: qrUrl 
     }).eq('id', txId);
+    if (error) throw error;
   },
 
   withdrawSupport: async (txId: string) => {
-    await supabase.from('transactions').update({ 
+    const { error } = await supabase.from('transactions').update({ 
       status: TrackerStep.WAITING_SUPPORTER, 
       supporter_id: null 
     }).eq('id', txId);
+    if (error) throw error;
   },
 
   dismissTransaction: async (txId: string) => {
@@ -249,18 +259,21 @@ export const DBService = {
   },
 
   markCashPaid: async (txId: string) => {
-    await supabase.from('transactions').update({ status: TrackerStep.CASH_PAID }).eq('id', txId);
+    const { error } = await supabase.from('transactions').update({ status: TrackerStep.CASH_PAID }).eq('id', txId);
+    if (error) throw error;
   },
 
   completeTransaction: async (txId: string) => {
-    await supabase.from('transactions').update({ 
+    const { error } = await supabase.from('transactions').update({ 
       status: TrackerStep.COMPLETED, 
       completed_at: new Date().toISOString() 
     }).eq('id', txId);
+    if (error) throw error;
   },
 
   cancelTransaction: async (txId: string) => {
-    await supabase.from('transactions').update({ status: TrackerStep.CANCELLED }).eq('id', txId);
+    const { error } = await supabase.from('transactions').update({ status: TrackerStep.CANCELLED }).eq('id', txId);
+    if (error) throw error;
   },
 
   uploadAvatar: async (_file: File): Promise<string> => "https://picsum.photos/200",
