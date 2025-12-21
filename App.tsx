@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { BottomNav } from './components/BottomNav';
 import { WebNavbar } from './components/WebNavbar';
 import { Sidebar } from './components/Sidebar';
@@ -22,8 +22,8 @@ import { Chat } from './pages/Chat';
 import { ReferralService, DBService, User } from './types'; 
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
-const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+const DashboardLayout: React.FC = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -92,7 +92,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
     );
   }
 
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (isAuthenticated === false) return <Navigate to="/login" replace />;
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-900 flex">
@@ -100,30 +100,48 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
       <div className="flex-1 flex flex-col min-w-0">
         <div className="md:hidden"><WebNavbar /></div>
         <main className="flex-1 w-full max-w-5xl mx-auto p-0 md:p-6 lg:p-8">
-          {children}
+          <Outlet />
         </main>
         <BottomNav />
       </div>
-      <RightSidebar />
+      <div className="hidden lg:block">
+        <RightSidebar />
+      </div>
     </div>
   );
 };
 
 const AppRoutes: React.FC = () => (
   <Routes>
+    {/* Herkese Açık Sayfalar */}
     <Route path="/" element={<Landing />} />
     <Route path="/login" element={<Login />} />
     <Route path="/register" element={<Register />} />
-    <Route path="/app" element={<DashboardLayout><Home /></DashboardLayout>} />
-    <Route path="/find-share" element={<DashboardLayout><FindShare /></DashboardLayout>} />
-    <Route path="/supporters" element={<DashboardLayout><Supporters /></DashboardLayout>} />
-    <Route path="/profile" element={<DashboardLayout><Profile /></DashboardLayout>} />
-    <Route path="/swap" element={<DashboardLayout><SwapList /></DashboardLayout>} />
-    <Route path="/chat" element={<DashboardLayout><Chat /></DashboardLayout>} />
+    <Route path="/privacy" element={<PrivacyPolicy />} />
+    
+    {/* Korumalı Dashboard Sayfaları (Persistent Layout) */}
+    <Route element={<DashboardLayout />}>
+      <Route path="/app" element={<Home />} />
+      <Route path="/find-share" element={<FindShare />} />
+      <Route path="/supporters" element={<Supporters />} />
+      <Route path="/profile" element={<Profile />} />
+      <Route path="/swap" element={<SwapList />} />
+      <Route path="/swap/create" element={<SwapCreate />} />
+      <Route path="/swap/:id" element={<SwapDetail />} />
+      <Route path="/invite" element={<Invite />} />
+      <Route path="/earnings" element={<Earnings />} />
+      <Route path="/chat" element={<Chat />} />
+    </Route>
+    
+    {/* Tanımsız Rotalar için Yönlendirme */}
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>
 );
 
 export default function App() {
-  return <BrowserRouter><AppRoutes /></BrowserRouter>;
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+  );
 }
