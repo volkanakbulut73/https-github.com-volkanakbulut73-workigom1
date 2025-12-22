@@ -183,11 +183,12 @@ export const DBService = {
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
     if (!isSupabaseConfigured() || !userId) return null;
     try {
-      // Sadece terminal olmayan veya tamamlanmış ama henüz kapatılmamış işlemleri çek
+      // Terminal durumları hariç tutmak için array sözdizimi kullanıyoruz
+      const terminalStatuses = [TrackerStep.DISMISSED, TrackerStep.CANCELLED, TrackerStep.FAILED];
       const { data, error } = await supabase.from('transactions')
         .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
         .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
-        .not('status', 'in', `(${TrackerStep.DISMISSED},${TrackerStep.CANCELLED},${TrackerStep.FAILED})`)
+        .not('status', 'in', `(${terminalStatuses.join(',')})`)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -208,23 +209,16 @@ export const DBService = {
   },
 
   acceptTransaction: async (txId: string, supporterId: string, percentage: 20 | 100) => {
-    const { data: updateData, error: updateError } = await supabase.from('transactions')
+    const { error: updateError } = await supabase.from('transactions')
       .update({ 
         supporter_id: supporterId, 
         status: TrackerStep.WAITING_CASH_PAYMENT,
         support_percentage: percentage
       })
       .eq('id', txId)
-      .eq('status', TrackerStep.WAITING_SUPPORTER)
-      .select()
-      .single();
+      .eq('status', TrackerStep.WAITING_SUPPORTER);
       
-    if (updateError) {
-        console.error("Accept Update Error:", updateError);
-        throw new Error(updateError.message === "JSON object requested, but no rows were returned" 
-            ? "Bu ilan başka bir destekçi tarafından alınmış olabilir." 
-            : "İlan kabul edilemedi.");
-    }
+    if (updateError) throw updateError;
 
     const { data, error: selectError } = await supabase.from('transactions')
       .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
@@ -246,7 +240,6 @@ export const DBService = {
   },
 
   withdrawSupport: async (txId: string) => {
-    // Destekçinin iptal etmesi: İlanı tekrar havuza bırak
     const { error } = await supabase.from('transactions').update({ 
       status: TrackerStep.WAITING_SUPPORTER, 
       supporter_id: null 
@@ -255,7 +248,8 @@ export const DBService = {
   },
 
   dismissTransaction: async (txId: string) => {
-    await supabase.from('transactions').update({ status: TrackerStep.DISMISSED }).eq('id', txId);
+    const { error } = await supabase.from('transactions').update({ status: TrackerStep.DISMISSED }).eq('id', txId);
+    if (error) throw error;
   },
 
   markCashPaid: async (txId: string) => {
@@ -272,7 +266,6 @@ export const DBService = {
   },
 
   cancelTransaction: async (txId: string) => {
-    // Alıcının iptal etmesi: İşlemi tamamen sonlandır
     const { error } = await supabase.from('transactions').update({ status: TrackerStep.CANCELLED }).eq('id', txId);
     if (error) throw error;
   },
