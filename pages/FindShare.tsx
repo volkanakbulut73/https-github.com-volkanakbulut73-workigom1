@@ -28,13 +28,12 @@ export const FindShare: React.FC = () => {
             const tx = await DBService.getActiveTransaction(session.user.id);
             if (tx) {
                 setActiveTransaction(prev => {
-                    // Durum veya destekçi değiştiyse anında güncelle
                     if (!prev || prev.status !== tx.status || prev.supporterId !== tx.supporterId || prev.qrUrl !== tx.qrUrl) {
                         return tx;
                     }
                     return prev;
                 });
-            } else if (activeTransaction && activeTransaction.status !== TrackerStep.COMPLETED) {
+            } else if (activeTransaction && (activeTransaction.status !== TrackerStep.COMPLETED)) {
                 setActiveTransaction(null);
             }
         }
@@ -47,7 +46,6 @@ export const FindShare: React.FC = () => {
 
   useEffect(() => {
     fetchCurrentStatus();
-    // 3 saniyede bir kontrol (Gecikmeyi önlemek için daha agresif polling)
     pollIntervalRef.current = setInterval(() => fetchCurrentStatus(true), 3000);
     return () => clearInterval(pollIntervalRef.current);
   }, []);
@@ -66,7 +64,6 @@ export const FindShare: React.FC = () => {
             table: 'transactions',
             filter: `id=eq.${activeTransaction.id}`
         }, (payload: any) => {
-            console.log("Realtime Update Received:", payload.new);
             const newData = payload.new;
             if (newData) {
                 setActiveTransaction(prev => {
@@ -144,6 +141,7 @@ export const FindShare: React.FC = () => {
     try {
         await DBService.cancelTransaction(activeTransaction.id);
         setActiveTransaction(null);
+        navigate('/app'); // Ana sayfaya dön
     } catch (e) { 
         setFormError("İptal başarısız."); 
     } finally { 
@@ -156,8 +154,10 @@ export const FindShare: React.FC = () => {
     try {
         await DBService.dismissTransaction(activeTransaction.id);
         setActiveTransaction(null);
+        navigate('/app'); // Ana sayfaya dön
     } catch (e) {
         setActiveTransaction(null);
+        navigate('/app');
     }
   };
 
@@ -166,8 +166,8 @@ export const FindShare: React.FC = () => {
       <div className="pb-32 min-h-screen bg-gray-50 font-sans">
         <div className="bg-slate-900 text-white pt-4 pb-14 px-6 rounded-b-[3rem] relative shadow-xl">
           <div className="flex justify-between items-center mb-2">
-             <button onClick={() => navigate(-1)} className="flex items-center text-white/80 hover:text-white transition-colors">
-               <ChevronLeft /> <span className="text-sm font-medium ml-1">Geri</span>
+             <button onClick={() => navigate('/app')} className="flex items-center text-white/80 hover:text-white transition-colors">
+               <ChevronLeft /> <span className="text-sm font-medium ml-1">Kapat</span>
              </button>
              <h1 className="text-lg font-bold">İşlem Takibi</h1>
              <button onClick={() => fetchCurrentStatus()} className={`p-2 bg-white/10 rounded-full ${refreshing ? 'animate-spin' : ''}`}>
@@ -242,7 +242,7 @@ export const FindShare: React.FC = () => {
                     </div>
                     <h2 className="text-xl font-black text-slate-900 mb-2">Harika! 🎉</h2>
                     <p className="text-sm text-gray-500 mb-6">Ödeme başarıyla tamamlandı. Tasarrufunuz cüzdanınıza yansıtıldı.</p>
-                    <Button fullWidth onClick={handleDismiss} className="py-4">Kapat</Button>
+                    <Button fullWidth onClick={handleDismiss} className="py-4">Kapat ve Ana Sayfaya Dön</Button>
                 </div>
             )}
 
@@ -260,7 +260,7 @@ export const FindShare: React.FC = () => {
     <div className="pb-24 min-h-screen bg-gray-50 font-sans">
       <div className="bg-slate-900 text-white pt-10 pb-10 px-5 rounded-b-[1.5rem] shadow-sm relative z-20">
          <div className="relative z-30 flex items-center gap-3">
-            <button onClick={() => navigate(-1)} className="w-8 h-8 flex items-center justify-center bg-white/10 rounded-full hover:bg-white/20 transition-colors">
+            <button onClick={() => navigate('/app')} className="w-8 h-8 flex items-center justify-center bg-white/10 rounded-full hover:bg-white/20 transition-colors">
                 <ChevronLeft size={16} className="text-white" />
             </button>
             <h1 className="text-sm font-bold tracking-wide">Yeni Paylaşım Talebi</h1>

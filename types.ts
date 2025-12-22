@@ -183,10 +183,11 @@ export const DBService = {
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
     if (!isSupabaseConfigured() || !userId) return null;
     try {
+      // Sadece terminal olmayan veya tamamlanmış ama henüz kapatılmamış işlemleri çek
       const { data, error } = await supabase.from('transactions')
         .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
         .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
-        .neq('status', TrackerStep.DISMISSED)
+        .not('status', 'in', `(${TrackerStep.DISMISSED},${TrackerStep.CANCELLED},${TrackerStep.FAILED})`)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -207,7 +208,6 @@ export const DBService = {
   },
 
   acceptTransaction: async (txId: string, supporterId: string, percentage: 20 | 100) => {
-    // RLS kısıtlamalarına karşı update işlemini hata kontrolüyle yapıyoruz
     const { data: updateData, error: updateError } = await supabase.from('transactions')
       .update({ 
         supporter_id: supporterId, 
@@ -215,7 +215,7 @@ export const DBService = {
         support_percentage: percentage
       })
       .eq('id', txId)
-      .eq('status', TrackerStep.WAITING_SUPPORTER) // Sadece hala bekleyen ilanları alabilmek için
+      .eq('status', TrackerStep.WAITING_SUPPORTER)
       .select()
       .single();
       
@@ -223,10 +223,9 @@ export const DBService = {
         console.error("Accept Update Error:", updateError);
         throw new Error(updateError.message === "JSON object requested, but no rows were returned" 
             ? "Bu ilan başka bir destekçi tarafından alınmış olabilir." 
-            : "İlan kabul edilemedi: RLS veya Bağlantı Hatası.");
+            : "İlan kabul edilemedi.");
     }
 
-    // İlişkili dataları çek (Seeker/Supporter isimleri için)
     const { data, error: selectError } = await supabase.from('transactions')
       .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
       .eq('id', txId)
@@ -247,6 +246,7 @@ export const DBService = {
   },
 
   withdrawSupport: async (txId: string) => {
+    // Destekçinin iptal etmesi: İlanı tekrar havuza bırak
     const { error } = await supabase.from('transactions').update({ 
       status: TrackerStep.WAITING_SUPPORTER, 
       supporter_id: null 
@@ -272,6 +272,7 @@ export const DBService = {
   },
 
   cancelTransaction: async (txId: string) => {
+    // Alıcının iptal etmesi: İşlemi tamamen sonlandır
     const { error } = await supabase.from('transactions').update({ status: TrackerStep.CANCELLED }).eq('id', txId);
     if (error) throw error;
   },

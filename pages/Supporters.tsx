@@ -42,7 +42,6 @@ export const Supporters: React.FC = () => {
   const [qrUploading, setQrUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
-  // Race condition önleyici kilit
   const ignoreNextFetchRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,7 +75,6 @@ export const Supporters: React.FC = () => {
         const currentUser = session?.user;
         if (!currentUser) return;
         
-        // 1. Bekleyen ilanları çek
         const rawData = await DBService.getPendingTransactions();
         const mappedListings: UIListing[] = rawData.map((item: any) => {
             const profile = item.profiles || item.seeker || {};
@@ -96,15 +94,11 @@ export const Supporters: React.FC = () => {
         });
         setListings(mappedListings);
 
-        // 2. Aktif işlemi çek (Race condition kilidi yoksa)
         if (!ignoreNextFetchRef.current) {
             const activeTx = await DBService.getActiveTransaction(currentUser.id);
-            // Sadece bizim destekçi olduğumuz işlemleri Supporters sayfasında gösteriyoruz
             if (activeTx && activeTx.supporterId === currentUser.id) {
                 setActiveTransaction(activeTx);
             } else if (!activeTx && activeTransaction) {
-                // Eğer localde aktif işlem varken servisten null dönerse (ve kilit yoksa)
-                // Bu işlemin kapandığını veya terminal duruma geçtiğini gösterir
                 setActiveTransaction(null);
             }
         }
@@ -140,7 +134,7 @@ export const Supporters: React.FC = () => {
     if (!selectedListing || isProcessing) return;
     setIsProcessing(true);
     setErrorMsg(null);
-    ignoreNextFetchRef.current = true; // KİLİDİ AÇ: fetchData'nın durumu ezmesini engelle
+    ignoreNextFetchRef.current = true; 
 
     try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -164,12 +158,10 @@ export const Supporters: React.FC = () => {
           amounts: calculateTransaction(updated.amount, updated.support_percentage)
         };
 
-        // Local state'i hemen güncelle
         setActiveTransaction(realTx);
         setActiveTab('my-support');
         setShowSelectionModal(false);
 
-        // 5 saniye sonra kilidi kaldır (Supabase'in kendine gelmesi için yeterli süre)
         setTimeout(() => {
             ignoreNextFetchRef.current = false;
         }, 5000);
@@ -177,7 +169,7 @@ export const Supporters: React.FC = () => {
     } catch (err: any) {
         console.error("Support acceptance error:", err);
         setErrorMsg(err.message || "İşlem başarısız.");
-        ignoreNextFetchRef.current = false; // Hata durumunda kilidi hemen kaldır
+        ignoreNextFetchRef.current = false; 
     } finally {
         setIsProcessing(false);
     }
@@ -202,8 +194,7 @@ export const Supporters: React.FC = () => {
     try {
         await DBService.withdrawSupport(activeTransaction.id);
         setActiveTransaction(null);
-        setActiveTab('all');
-        fetchData(true);
+        navigate('/app'); // Ana sayfaya dön
     } catch (e) { alert("Hata oluştu."); }
   };
 
@@ -211,10 +202,10 @@ export const Supporters: React.FC = () => {
      try {
          if (activeTransaction) await DBService.dismissTransaction(activeTransaction.id);
          setActiveTransaction(null);
-         setActiveTab('all');
-         fetchData(true);
+         navigate('/app'); // Ana sayfaya dön
      } catch (e) {
          setActiveTransaction(null);
+         navigate('/app');
      }
   };
 
@@ -222,6 +213,9 @@ export const Supporters: React.FC = () => {
     <div className="pb-24 min-h-screen bg-gray-50 relative">
       <div className="bg-slate-900 text-white pt-10 pb-10 px-5 rounded-b-[1.5rem] shadow-sm relative z-20">
          <div className="relative z-30 flex items-center gap-3">
+            <button onClick={() => navigate('/app')} className="md:hidden w-8 h-8 flex items-center justify-center bg-white/10 rounded-full">
+              <ChevronLeft size={16}/>
+            </button>
             <h1 className="text-sm font-bold tracking-wide">Paylaşım Talepleri</h1>
          </div>
       </div>
@@ -360,7 +354,7 @@ export const Supporters: React.FC = () => {
                                     <p className="text-sm font-bold text-emerald-800">Tebrikler! 🎉</p>
                                     <p className="text-xs text-emerald-600">Bakiyeniz nakit olarak cüzdanınıza aktarıldı.</p>
                                 </div>
-                                <Button fullWidth onClick={handleDismissTransaction} className="bg-emerald-500 py-4">İşlemi Kapat</Button>
+                                <Button fullWidth onClick={handleDismissTransaction} className="bg-emerald-500 py-4">Kapat ve Ana Sayfaya Dön</Button>
                              </div>
                         )}
                         
