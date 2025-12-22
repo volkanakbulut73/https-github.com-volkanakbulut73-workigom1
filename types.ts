@@ -83,10 +83,11 @@ export interface Transaction {
   seekerName?: string;
   supporterName?: string;
   amounts: {
+    contribution: number;
+    fee: number;
+    supporterTotalPay: number;
     seekerPayment: number;
-    seekerSavings: number;
-    supportAmount: number;
-    refundToSupporter: number;
+    netToSupporter: number;
   };
 }
 
@@ -96,17 +97,31 @@ export const formatName = (fullName: string): string => {
   return parts.length === 1 ? parts[0] : `${parts[0]} ${parts[parts.length - 1][0]}.`;
 };
 
-export const calculateTransaction = (amount: number, percentage?: number) => {
-  const p = percentage || 20;
-  const seekerPayment = p === 100 ? 0 : amount * 0.8;
+export const calculateTransaction = (totalAmount: number, percentage: 20 | 100 = 20) => {
+  if (percentage === 100) {
+    return {
+      contribution: totalAmount,
+      fee: 0,
+      supporterTotalPay: totalAmount,
+      seekerPayment: 0,
+      netToSupporter: 0
+    };
+  }
+  
+  const contribution = totalAmount * 0.20;
+  const fee = totalAmount * 0.05;
+  const seekerPayment = totalAmount * 0.80;
+  
   return {
+    contribution,
+    fee,
+    supporterTotalPay: contribution + fee,
     seekerPayment,
-    seekerSavings: amount - seekerPayment,
-    supportAmount: amount,
-    refundToSupporter: p === 100 ? 0 : seekerPayment - (amount * 0.05)
+    netToSupporter: seekerPayment - fee
   };
 };
 
+// Fixed error on line 126: Removed 'seeker_id' property as it is not part of Transaction interface
 export const mapDBTransaction = (dbItem: any): Transaction => ({
   id: dbItem.id,
   seekerId: dbItem.seeker_id,
@@ -119,7 +134,7 @@ export const mapDBTransaction = (dbItem: any): Transaction => ({
   createdAt: dbItem.created_at,
   seekerName: dbItem.seeker?.full_name ? formatName(dbItem.seeker.full_name) : 'Alıcı',
   supporterName: dbItem.supporter?.full_name ? formatName(dbItem.supporter.full_name) : undefined,
-  amounts: calculateTransaction(dbItem.amount, dbItem.support_percentage)
+  amounts: calculateTransaction(dbItem.amount, dbItem.support_percentage || 20)
 });
 
 export const ReferralService = {
@@ -229,7 +244,6 @@ export const DBService = {
   },
 
   uploadQR: async (file: File): Promise<string> => {
-    // Galeriden seçilen dosyayı Base64 formatına çevirir
     return await fileToBase64(file);
   },
 

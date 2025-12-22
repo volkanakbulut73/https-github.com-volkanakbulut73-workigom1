@@ -151,11 +151,11 @@ export const Supporters: React.FC = () => {
           amount: updated.amount,
           listingTitle: updated.listing_title,
           status: updated.status as TrackerStep,
-          supportPercentage: updated.support_percentage,
+          supportPercentage: updated.support_percentage as (20 | 100),
           createdAt: updated.created_at,
           seekerName: selectedListing.name,
           supporterName: 'Ben',
-          amounts: calculateTransaction(updated.amount, updated.support_percentage)
+          amounts: calculateTransaction(updated.amount, updated.support_percentage as (20 | 100))
         };
 
         setActiveTransaction(realTx);
@@ -213,6 +213,10 @@ export const Supporters: React.FC = () => {
          navigate('/app');
      }
   };
+
+  // Hesaplamalar (Modal İçin)
+  const calc20 = selectedListing ? calculateTransaction(selectedListing.amount, 20) : null;
+  const calc100 = selectedListing ? calculateTransaction(selectedListing.amount, 100) : null;
 
   return (
     <div className="pb-24 min-h-screen bg-gray-50 relative">
@@ -375,34 +379,115 @@ export const Supporters: React.FC = () => {
         )}
       </div>
 
-      {showSelectionModal && selectedListing && (
+      {/* PAYLAŞIM SEÇİMİ MODALI */}
+      {showSelectionModal && selectedListing && calc20 && calc100 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl relative">
-            <button onClick={() => !isProcessing && setShowSelectionModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-slate-900 transition-colors" disabled={isProcessing}><X size={24} /></button>
-            <h3 className="text-xl font-black text-slate-900 mb-6 tracking-tight">Destek Oranı Seçin</h3>
+          <div className="bg-[#FFFCF5] w-full max-w-sm rounded-[2rem] p-6 shadow-2xl relative border border-gray-100">
+            {/* Kapatma Butonu */}
+            <button 
+                onClick={() => !isProcessing && setShowSelectionModal(false)} 
+                className="absolute top-4 right-4 text-gray-400 hover:text-slate-900 transition-colors" 
+                disabled={isProcessing}
+            >
+                <X size={20} />
+            </button>
+
+            {/* Başlık */}
+            <div className="mb-6">
+                <h3 className="text-lg font-black text-slate-800 tracking-tight">Paylaşım Seçimi</h3>
+                <p className="text-xs font-medium text-slate-500 mt-0.5">{selectedListing.name} için paylaşım oranını seçin</p>
+            </div>
             
             {errorMsg && (
-                <div className="bg-red-50 text-red-600 p-4 rounded-2xl text-[10px] font-bold mb-4 flex items-center gap-2 border border-red-100">
+                <div className="bg-red-50 text-red-600 p-3 rounded-xl text-[10px] font-bold mb-4 flex items-center gap-2 border border-red-100">
                     <AlertTriangle size={14} className="shrink-0"/> {errorMsg}
                 </div>
             )}
 
             <div className="space-y-4">
-                <div onClick={() => !isProcessing && setSelectedPercentage(20)} className={`p-5 rounded-2xl border-2 transition-all cursor-pointer ${selectedPercentage === 20 ? 'border-slate-900 bg-slate-50' : 'border-gray-50 bg-gray-50/50 hover:bg-gray-50'}`}>
-                    <div className="flex justify-between font-black text-sm mb-1 text-slate-900"><span>%20 Paylaşım</span><span>₺{(selectedListing.amount * 0.2).toFixed(0)}</span></div>
-                    <p className="text-[10px] text-gray-500 font-medium leading-relaxed">Bakiyenizin %20'si ile destek olun, nakit tasarrufu sağlayın.</p>
+                {/* %20 Paylaşım Kartı */}
+                <div 
+                    onClick={() => !isProcessing && setSelectedPercentage(20)} 
+                    className={`p-5 rounded-[1.5rem] border-2 transition-all cursor-pointer relative ${selectedPercentage === 20 ? 'border-slate-800 bg-[#F2F7F2]' : 'border-gray-100 bg-white hover:border-gray-200'}`}
+                >
+                    <div className="flex justify-between items-center mb-4">
+                        <span className="text-sm font-black text-slate-800">%20 Paylaşım</span>
+                        <span className="bg-[#0D3B66] text-white text-[9px] px-3 py-1 rounded-full font-black uppercase tracking-widest">Standart</span>
+                    </div>
+
+                    <div className="space-y-2 text-xs font-medium">
+                        <div className="flex justify-between text-slate-600">
+                            <span>Senin katkın:</span>
+                            <span className="font-bold">{calc20.contribution.toFixed(0)} ₺</span>
+                        </div>
+                        <div className="flex justify-between text-[#2D6A4F]/80">
+                            <span>Platform ücreti: %5</span>
+                            <span className="font-bold">{calc20.fee.toFixed(0)} ₺</span>
+                        </div>
+                        <div className="h-[1px] bg-slate-200 my-2"></div>
+                        <div className="flex justify-between text-slate-800 font-black">
+                            <span>Toplam ödeyeceğin:</span>
+                            <span>{calc20.supporterTotalPay.toFixed(0)} ₺</span>
+                        </div>
+                    </div>
+
+                    {/* Footer Info Box */}
+                    <div className="mt-4 bg-[#E8F5E9] p-3 rounded-2xl border border-[#C8E6C9] space-y-0.5">
+                        <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-bold text-[#2E7D32]">Hesabına aktarılacak:</span>
+                            <span className="text-xs font-black text-[#2E7D32]">{calc20.netToSupporter.toFixed(0)} ₺</span>
+                        </div>
+                        <p className="text-[9px] text-[#2E7D32]/70 text-right">Yararlanıcı {calc20.seekerPayment.toFixed(0)} ₺ ödeyecek</p>
+                    </div>
                 </div>
-                <div onClick={() => !isProcessing && setSelectedPercentage(100)} className={`p-5 rounded-2xl border-2 transition-all cursor-pointer ${selectedPercentage === 100 ? 'border-pink-500 bg-pink-50' : 'border-gray-50 bg-gray-50/50 hover:bg-gray-50'}`}>
-                    <div className="flex justify-between font-black text-sm mb-1 text-pink-600"><span>%100 Buda Benden</span><span>₺{selectedListing.amount}</span></div>
-                    <p className="text-[10px] text-pink-500 font-medium leading-relaxed">Hesabın tamamını siz üstlenin, toplulukta "Altın Kalp" kazanın.</p>
+
+                {/* %100 Altın Kalp Kartı */}
+                <div 
+                    onClick={() => !isProcessing && setSelectedPercentage(100)} 
+                    className={`p-5 rounded-[1.5rem] border-2 transition-all cursor-pointer relative ${selectedPercentage === 100 ? 'border-[#FFB703] bg-[#FFF9E6]' : 'border-gray-100 bg-white hover:border-gray-200'}`}
+                >
+                    <div className="flex justify-between items-center mb-4">
+                        <span className="text-sm font-black text-slate-800">%100 Buda Benden ❤️</span>
+                        <span className="bg-[#FFB703] text-white text-[9px] px-3 py-1 rounded-full font-black uppercase tracking-widest">Altın Kalp</span>
+                    </div>
+
+                    <div className="space-y-2 text-xs font-medium mb-4">
+                        <div className="flex justify-between text-slate-600">
+                            <span>Senin katkın:</span>
+                            <span className="font-bold">{calc100.contribution.toFixed(0)} ₺</span>
+                        </div>
+                        <div className="flex justify-between text-[#D4A373]">
+                            <span>Platform ücreti: %0 - Buda Bizden olsun 😊</span>
+                        </div>
+                    </div>
+
+                    {/* Footer Warning Box */}
+                    <div className="bg-[#FFFCE0] p-4 rounded-2xl border border-[#FFECB3] text-center space-y-1">
+                        <p className="text-[10px] font-bold text-[#A67C00]">Yemek ücretinin tamamını ödemeyi kabul ettiniz.</p>
+                        <div className="flex justify-between items-center px-2">
+                             <span className="text-[10px] text-[#A67C00]/70">Hesabınıza aktarılacak tutar:</span>
+                             <span className="text-[11px] font-black text-[#A67C00]">0 ₺</span>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <div className="mt-10 flex gap-3">
-                <Button fullWidth variant="secondary" className="py-4" onClick={() => setShowSelectionModal(false)} disabled={isProcessing}>Vazgeç</Button>
-                <Button fullWidth onClick={handleConfirmSupport} disabled={isProcessing} className="py-4 shadow-xl shadow-slate-900/10">
-                    {isProcessing ? <Loader2 className="animate-spin" /> : 'Devam Et'}
-                </Button>
+            {/* Butonlar */}
+            <div className="mt-8 flex gap-3">
+                <button 
+                    className="flex-1 py-3.5 rounded-2xl font-bold text-xs text-slate-500 bg-white border border-gray-200 hover:bg-gray-50 active:scale-95 transition-all"
+                    onClick={() => setShowSelectionModal(false)} 
+                    disabled={isProcessing}
+                >
+                    İptal
+                </button>
+                <button 
+                    className="flex-1 py-3.5 rounded-2xl font-bold text-xs text-white bg-[#0D3B66] hover:bg-[#0A2E50] shadow-lg shadow-[#0D3B66]/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                    onClick={handleConfirmSupport} 
+                    disabled={isProcessing}
+                >
+                    {isProcessing ? <Loader2 className="animate-spin" size={14} /> : 'Devam Et'}
+                </button>
             </div>
           </div>
         </div>
