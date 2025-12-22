@@ -183,12 +183,12 @@ export const DBService = {
   getActiveTransaction: async (userId: string): Promise<Transaction | null> => {
     if (!isSupabaseConfigured() || !userId) return null;
     try {
-      // Terminal durumları hariç tutmak için array sözdizimi kullanıyoruz
-      const terminalStatuses = [TrackerStep.DISMISSED, TrackerStep.CANCELLED, TrackerStep.FAILED];
       const { data, error } = await supabase.from('transactions')
         .select(`*, seeker:profiles!seeker_id(full_name), supporter:profiles!supporter_id(full_name)`)
         .or(`seeker_id.eq.${userId},supporter_id.eq.${userId}`)
-        .not('status', 'in', `(${terminalStatuses.join(',')})`)
+        .neq('status', TrackerStep.DISMISSED)
+        .neq('status', TrackerStep.CANCELLED)
+        .neq('status', TrackerStep.FAILED)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -215,8 +215,7 @@ export const DBService = {
         status: TrackerStep.WAITING_CASH_PAYMENT,
         support_percentage: percentage
       })
-      .eq('id', txId)
-      .eq('status', TrackerStep.WAITING_SUPPORTER);
+      .match({ id: txId, status: TrackerStep.WAITING_SUPPORTER });
       
     if (updateError) throw updateError;
 
@@ -240,10 +239,13 @@ export const DBService = {
   },
 
   withdrawSupport: async (txId: string) => {
-    const { error } = await supabase.from('transactions').update({ 
-      status: TrackerStep.WAITING_SUPPORTER, 
-      supporter_id: null 
-    }).eq('id', txId);
+    // 400 hatasını önlemek için sadece gerekli alanları gönderiyoruz
+    const { error } = await supabase.from('transactions')
+      .update({ 
+        status: TrackerStep.WAITING_SUPPORTER, 
+        supporter_id: null 
+      })
+      .match({ id: txId });
     if (error) throw error;
   },
 
@@ -266,7 +268,10 @@ export const DBService = {
   },
 
   cancelTransaction: async (txId: string) => {
-    const { error } = await supabase.from('transactions').update({ status: TrackerStep.CANCELLED }).eq('id', txId);
+    // 400 hatasını önlemek için basitleştirilmiş update
+    const { error } = await supabase.from('transactions')
+      .update({ status: TrackerStep.CANCELLED })
+      .match({ id: txId });
     if (error) throw error;
   },
 
