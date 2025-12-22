@@ -239,11 +239,9 @@ export const DBService = {
   },
 
   withdrawSupport: async (txId: string) => {
-    // Destekçi iptal ettiğinde veritabanından silinmesi için RPC çağrısı
-    const { error } = await supabase.rpc('cancel_transaction', { 
-      p_tx_id: txId, 
-      p_reason: 'Destekçi işlemi iptal etti' 
-    });
+    // Tetikleyici (Trigger) silme anında otomatik arşivleme yapacaktır.
+    // Doğrudan DELETE sorgusu göndererek RPC ile tetikleyici çakışmasını engelliyoruz.
+    const { error } = await supabase.from('transactions').delete().eq('id', txId);
     if (error) throw error;
   },
 
@@ -266,11 +264,9 @@ export const DBService = {
   },
 
   cancelTransaction: async (txId: string) => {
-    // Alıcı iptal ettiğinde veritabanından silinmesi için RPC çağrısı
-    const { error } = await supabase.rpc('cancel_transaction', { 
-      p_tx_id: txId, 
-      p_reason: 'Alıcı işlemi iptal etti' 
-    });
+    // Alıcı iptal ettiğinde satırı siliyoruz.
+    // Veritabanındaki 'transactions_archive_before_delete' tetikleyicisi bu satırı otomatik olarak arşivleyecektir.
+    const { error } = await supabase.from('transactions').delete().eq('id', txId);
     if (error) throw error;
   },
 
