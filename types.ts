@@ -228,7 +228,10 @@ export const DBService = {
     return data;
   },
 
-  uploadQR: async (_file: File): Promise<string> => "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=workigom-transaction",
+  uploadQR: async (file: File): Promise<string> => {
+    // Galeriden seçilen dosyayı Base64 formatına çevirir
+    return await fileToBase64(file);
+  },
 
   submitQR: async (txId: string, qrUrl: string) => {
     const { error } = await supabase.from('transactions').update({ 
@@ -239,8 +242,6 @@ export const DBService = {
   },
 
   withdrawSupport: async (txId: string) => {
-    // Tetikleyici (Trigger) silme anında otomatik arşivleme yapacaktır.
-    // Doğrudan DELETE sorgusu göndererek RPC ile tetikleyici çakışmasını engelliyoruz.
     const { error } = await supabase.from('transactions').delete().eq('id', txId);
     if (error) throw error;
   },
@@ -264,13 +265,13 @@ export const DBService = {
   },
 
   cancelTransaction: async (txId: string) => {
-    // Alıcı iptal ettiğinde satırı siliyoruz.
-    // Veritabanındaki 'transactions_archive_before_delete' tetikleyicisi bu satırı otomatik olarak arşivleyecektir.
     const { error } = await supabase.from('transactions').delete().eq('id', txId);
     if (error) throw error;
   },
 
-  uploadAvatar: async (_file: File): Promise<string> => "https://picsum.photos/200",
+  uploadAvatar: async (file: File): Promise<string> => {
+    return await fileToBase64(file);
+  },
 
   updateUserProfile: async (id: string, updates: { name: string, location: string, avatar: string }) => {
     const { error } = await supabase.from('profiles').update({
@@ -340,7 +341,9 @@ export const SwapService = {
   deleteListing: async (id: string) => {
     await supabase.from('swap_listings').delete().eq('id', id);
   },
-  uploadImage: async (_file: File): Promise<string> => "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=500"
+  uploadImage: async (file: File): Promise<string> => {
+    return await fileToBase64(file);
+  }
 };
 
 export const fileToBase64 = (file: File): Promise<string> => {
