@@ -239,13 +239,11 @@ export const DBService = {
   },
 
   withdrawSupport: async (txId: string) => {
-    // 400 hatasını önlemek için sadece gerekli alanları gönderiyoruz
-    const { error } = await supabase.from('transactions')
-      .update({ 
-        status: TrackerStep.WAITING_SUPPORTER, 
-        supporter_id: null 
-      })
-      .match({ id: txId });
+    // Destekçi iptal ettiğinde veritabanından silinmesi için RPC çağrısı
+    const { error } = await supabase.rpc('cancel_transaction', { 
+      p_tx_id: txId, 
+      p_reason: 'Destekçi işlemi iptal etti' 
+    });
     if (error) throw error;
   },
 
@@ -268,10 +266,11 @@ export const DBService = {
   },
 
   cancelTransaction: async (txId: string) => {
-    // 400 hatasını önlemek için basitleştirilmiş update
-    const { error } = await supabase.from('transactions')
-      .update({ status: TrackerStep.CANCELLED })
-      .match({ id: txId });
+    // Alıcı iptal ettiğinde veritabanından silinmesi için RPC çağrısı
+    const { error } = await supabase.rpc('cancel_transaction', { 
+      p_tx_id: txId, 
+      p_reason: 'Alıcı işlemi iptal etti' 
+    });
     if (error) throw error;
   },
 

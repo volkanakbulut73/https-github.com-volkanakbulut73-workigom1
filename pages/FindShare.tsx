@@ -141,9 +141,9 @@ export const FindShare: React.FC = () => {
     try {
         await DBService.cancelTransaction(activeTransaction.id);
         setActiveTransaction(null);
-        navigate('/app'); // Ana sayfaya dön
-    } catch (e) { 
-        setFormError("İptal başarısız."); 
+        navigate('/app'); 
+    } catch (e: any) { 
+        setFormError("İptal başarısız: " + (e.message || "Hata")); 
     } finally { 
         setLoading(false); 
     }
@@ -154,7 +154,7 @@ export const FindShare: React.FC = () => {
     try {
         await DBService.dismissTransaction(activeTransaction.id);
         setActiveTransaction(null);
-        navigate('/app'); // Ana sayfaya dön
+        navigate('/app');
     } catch (e) {
         setActiveTransaction(null);
         navigate('/app');
@@ -177,6 +177,13 @@ export const FindShare: React.FC = () => {
         </div>
 
         <div className="px-6 -mt-8 relative z-10 space-y-6">
+            {formError && (
+                <div className="bg-red-50 text-red-600 p-4 rounded-xl text-xs font-bold flex items-center gap-2 border border-red-100 animate-fade-in">
+                    <AlertTriangle size={16} className="shrink-0" />
+                    {formError}
+                </div>
+            )}
+            
             <div className="bg-white p-6 rounded-[2rem] shadow-sm">
                 <h2 className="font-bold text-lg text-gray-800 flex items-center gap-2 mb-6">
                     <span className="w-1 h-6 bg-slate-900 rounded-full"></span>

@@ -191,18 +191,23 @@ export const Supporters: React.FC = () => {
   const handleCancelTransaction = async () => {
     if (!activeTransaction) return;
     if (!window.confirm("Desteği geri çekmek istiyor musunuz?")) return;
+    setLoading(true);
     try {
         await DBService.withdrawSupport(activeTransaction.id);
         setActiveTransaction(null);
-        navigate('/app'); // Ana sayfaya dön
-    } catch (e) { alert("Hata oluştu."); }
+        navigate('/app'); 
+    } catch (e: any) { 
+        alert("Hata oluştu: " + (e.message || "Hata")); 
+    } finally {
+        setLoading(false);
+    }
   };
 
   const handleDismissTransaction = async () => {
      try {
          if (activeTransaction) await DBService.dismissTransaction(activeTransaction.id);
          setActiveTransaction(null);
-         navigate('/app'); // Ana sayfaya dön
+         navigate('/app'); 
      } catch (e) {
          setActiveTransaction(null);
          navigate('/app');
