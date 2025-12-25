@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Loader2, Terminal, Shield, AlertCircle, RefreshCw, Radio } from 'lucide-react';
+import { ChevronLeft, Loader2, Terminal, Shield, AlertCircle, RefreshCw } from 'lucide-react';
 import { ReferralService } from '../types';
 
 export const Chat: React.FC = () => {
@@ -15,15 +15,13 @@ export const Chat: React.FC = () => {
     if (sdkInitialized.current) return;
 
     const initSDK = () => {
-      // SDK tarafından pencereye (window) eklenen global init fonksiyonu
+      // Script tag ile yüklenen global fonksiyonu kontrol et
       const initFn = (window as any).initWorkigomChat;
 
       if (typeof initFn === 'function') {
         try {
-          // SDK v1.1.1 Parametreleri
-          initFn('workigom-chat-container', {
+          initFn('workigom-chat-target', {
             externalUser: user?.name || 'User_' + Math.floor(Math.random() * 9999),
-            embedded: true, // Tanıtım sayfasını atla, doğrudan girişe git
             className: 'workigom-sdk-wrapper'
           });
           sdkInitialized.current = true;
@@ -31,8 +29,8 @@ export const Chat: React.FC = () => {
           setError(null);
           return true;
         } catch (err) {
-          console.error("SDK Initialization Error:", err);
-          setError("Sohbet modülü başlatılırken bir sistem hatası oluştu.");
+          console.error("SDK Init Execution Error:", err);
+          setError("Sohbet modülü çalıştırılamadı.");
           setLoading(false);
           return true;
         }
@@ -40,15 +38,15 @@ export const Chat: React.FC = () => {
       return false;
     };
 
-    // Polling: Script yüklenene kadar kontrol et (Max 8 saniye)
+    // Polling: Script'in yüklenip global nesneye eklenmesini bekle
     let attempts = 0;
     const interval = setInterval(() => {
       attempts++;
       const success = initSDK();
-      if (success || attempts > 80) { 
+      if (success || attempts > 60) { // 6 saniye bekleme süresi
         clearInterval(interval);
         if (!success && !sdkInitialized.current) {
-          setError("Workigom Chat sunucusuyla el sıkışılamadı (Handshake Timeout). Lütfen sayfayı yenileyin.");
+          setError("Workigom Chat sunucusuna bağlanılamadı. Lütfen internet bağlantınızı ve domain ayarlarını kontrol edin.");
           setLoading(false);
         }
       }
@@ -58,72 +56,54 @@ export const Chat: React.FC = () => {
   }, [user?.name]);
 
   return (
-    <div className="min-h-screen bg-black flex flex-col h-[100dvh] overflow-hidden font-mono">
-      {/* OS Style Header (mIRC / Win95 Retro Aesthetic) */}
-      <div className="bg-[#000080] text-white px-4 py-2.5 flex items-center justify-between border-b border-gray-700 select-none shadow-xl shrink-0 z-50">
+    <div className="min-h-screen bg-black flex flex-col h-[100dvh] overflow-hidden">
+      {/* Terminal Style Header */}
+      <div className="bg-[#000080] text-white px-4 py-3 flex items-center justify-between border-b border-gray-700 select-none shadow-lg shrink-0">
         <div className="flex items-center gap-4">
           <button 
             onClick={() => navigate('/app')} 
-            className="hover:bg-white/20 p-1 rounded transition-colors flex items-center gap-1.5 border border-white/10 active:inset-px shadow-inner"
+            className="hover:bg-white/20 p-1.5 rounded transition-colors flex items-center gap-1"
           >
-            <ChevronLeft size={16} />
-            <span className="text-[9px] font-bold uppercase tracking-tighter">APP_ROOT</span>
+            <ChevronLeft size={18} />
+            <span className="text-[10px] font-mono hidden sm:inline">BACK_TO_APP</span>
           </button>
           
-          <div className="flex flex-col leading-none">
+          <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <Terminal size={12} className="text-emerald-400" />
-              <h1 className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">
-                Workigom.Chat Node [v1.1.1]
+              <Terminal size={14} className="text-emerald-400" />
+              <h1 className="font-mono text-xs font-bold uppercase tracking-widest text-emerald-100">
+                Workigom.Chat Node
               </h1>
             </div>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_5px_#10b981]"></span>
-              <span className="text-[8px] text-gray-400 uppercase font-black">
-                ID: {user?.name?.toUpperCase() || 'ANONYMOUS_GUEST'}
-              </span>
+            <div className="flex items-center gap-2 text-[9px] font-mono text-gray-400">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+              USR: {user?.name?.toUpperCase() || 'GUEST'}
             </div>
           </div>
         </div>
 
         <div className="flex gap-4 items-center">
-            <div className="hidden sm:flex items-center gap-2 text-[9px] text-white/40">
-                <Shield size={10} className="text-blue-400" />
-                <span className="tracking-widest">ENCRYPTED_TUNNEL</span>
+            <div className="hidden md:flex items-center gap-2 text-[10px] text-white/50 font-mono">
+                <Shield size={12} className="text-blue-400" />
+                <span>CROSSORIGIN_AUTH_OK</span>
             </div>
-            <div className="flex gap-1">
-                <div className="w-4 h-4 bg-gray-600 rounded-sm border border-white/10"></div>
-                <div className="w-4 h-4 bg-[#ff5555] rounded-sm border border-white/20 shadow-inner"></div>
+            <div className="flex gap-1.5">
+                <div className="w-3 h-3 bg-gray-600 rounded-sm"></div>
+                <div className="w-3 h-3 bg-[#ff5555] rounded-sm"></div>
             </div>
         </div>
       </div>
 
-      {/* Connection Status Bar */}
-      <div className="bg-[#1a1a1a] border-b border-white/5 px-4 py-1 flex items-center gap-4 shrink-0 overflow-hidden">
-        <div className="flex items-center gap-1.5 text-[8px] font-bold text-gray-500 whitespace-nowrap">
-          <Radio size={10} className={loading ? 'animate-bounce text-emerald-500' : 'text-gray-600'} />
-          STATUS: <span className={loading ? 'text-amber-500' : 'text-emerald-500'}>{loading ? 'ESTABLISHING_AUTH...' : 'CONNECTED'}</span>
-        </div>
-        <div className="flex-1 h-[1px] bg-white/5"></div>
-        <div className="text-[8px] text-gray-600 uppercase tracking-widest">
-          Node: workigomchat.online
-        </div>
-      </div>
-
-      {/* Content Area */}
       <div className="flex-1 relative bg-black flex flex-col">
         {loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-40 bg-black">
-            <div className="relative mb-8">
-                <Loader2 className="animate-spin text-emerald-500" size={56} strokeWidth={1} />
-                <div className="absolute inset-0 bg-emerald-500/10 blur-2xl rounded-full"></div>
-            </div>
-            <div className="space-y-3 text-center">
-                <p className="text-emerald-500 text-[10px] animate-pulse tracking-[0.5em] uppercase font-black">
-                  Bypassing Redirects...
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-50 bg-black/95">
+            <Loader2 className="animate-spin text-emerald-500 mb-6" size={48} strokeWidth={1.5} />
+            <div className="space-y-2 text-center">
+                <p className="text-emerald-500 font-mono text-xs animate-pulse tracking-[0.4em] uppercase">
+                  Connecting to Root...
                 </p>
-                <p className="text-gray-700 text-[8px] uppercase tracking-[0.3em]">
-                  Initializing Embedded Mode v1.1.1
+                <p className="text-gray-600 font-mono text-[9px] uppercase tracking-widest">
+                  Auth: workigomchat.online/index.js
                 </p>
             </div>
           </div>
@@ -131,58 +111,49 @@ export const Chat: React.FC = () => {
 
         {error && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-50 bg-black p-8">
-                <div className="p-8 bg-red-900/5 border border-red-500/20 rounded-[2rem] max-w-sm text-center shadow-2xl shadow-red-500/5">
-                    <AlertCircle size={48} className="text-red-500 mx-auto mb-6 opacity-80" />
-                    <p className="text-red-400 text-[11px] mb-8 uppercase tracking-wide leading-relaxed font-bold">
+                <div className="p-6 bg-red-900/10 border border-red-500/30 rounded-3xl max-w-sm text-center">
+                    <AlertCircle size={32} className="text-red-500 mx-auto mb-4" />
+                    <p className="text-red-400 font-mono text-xs mb-6 uppercase tracking-tight">
                         {error}
                     </p>
                     <button 
                         onClick={() => window.location.reload()}
-                        className="w-full bg-white text-black hover:bg-red-500 hover:text-white font-black text-[10px] px-8 py-4 rounded-xl uppercase transition-all flex items-center justify-center gap-3 shadow-xl"
+                        className="w-full bg-red-500 hover:bg-red-600 text-white font-mono text-[10px] font-bold px-6 py-3 rounded-xl uppercase transition-colors flex items-center justify-center gap-2"
                     >
-                        <RefreshCw size={14} /> Re-Init System
+                        <RefreshCw size={14} /> Retry Handshake
                     </button>
                 </div>
             </div>
         )}
         
-        {/* SDK v1.1.1 Target Container */}
         <div 
-          id="workigom-chat-container" 
-          className="w-full h-full flex-1 relative z-10"
+          id="workigom-chat-target" 
+          className="w-full h-full flex-1"
         ></div>
-
-        {/* CRT Scanline Effect Overlay */}
-        <div className="absolute inset-0 pointer-events-none z-20 opacity-[0.03] overflow-hidden">
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]"></div>
-        </div>
       </div>
 
       <style>{`
-        #workigom-chat-container {
+        #workigom-chat-target {
           background: #000;
           height: 100% !important;
           width: 100% !important;
           overflow: hidden;
         }
 
-        /* SDK v1.1.1 wrapper styles */
         .workigom-sdk-wrapper {
           height: 100% !important;
           width: 100% !important;
-          border: none !important;
         }
 
-        /* Fix for mobile keyboard and view height */
         @media (max-width: 768px) {
-          #workigom-chat-container {
+          #workigom-chat-target {
             position: fixed;
-            top: 72px; /* Header + Status Bar */
+            top: 52px;
             bottom: 0px;
             left: 0;
             right: 0;
             z-index: 10;
-            height: calc(100dvh - 72px) !important;
+            height: calc(100dvh - 52px) !important;
           }
         }
       `}</style>
