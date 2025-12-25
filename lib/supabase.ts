@@ -1,8 +1,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Fix: Cast the environment object to 'any' to avoid TypeScript errors when accessing its properties
-const env = (import.meta.env || {}) as any;
+// @ts-ignore
+const env = import.meta.env || {};
 
 const supabaseUrl = env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || '';
