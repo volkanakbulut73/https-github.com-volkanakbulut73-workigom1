@@ -14,46 +14,45 @@ export const Chat: React.FC = () => {
   useEffect(() => {
     if (sdkInitialized.current) return;
 
-    const loadAndInit = async () => {
-      try {
-        // 1. Önce global window nesnesinde var mı kontrol et (index.html'den gelmiş olabilir)
-        let initFn = (window as any).initWorkigomChat;
+    const initSDK = () => {
+      // Proxy yolu üzerinden yüklenen script'in global fonksiyonunu kontrol et
+      const initFn = (window as any).initWorkigomChat;
 
-        // 2. Eğer yoksa proxy üzerinden dinamik olarak import etmeyi dene (Root index.js)
-        if (!initFn) {
-          try {
-            const module = await import('/chat-sdk/index.js');
-            initFn = module.initWorkigomChat || (window as any).initWorkigomChat;
-          } catch (importErr) {
-            console.warn("Proxy import failed, falling back to secondary paths...");
-            // Geriye dönük uyumluluk için assets klasörünü de dene
-            const fallbackModule = await import('/chat-sdk/assets/index.js').catch(() => null);
-            if (fallbackModule) {
-              initFn = fallbackModule.initWorkigomChat || (window as any).initWorkigomChat;
-            }
-          }
-        }
-
-        if (typeof initFn === 'function') {
+      if (typeof initFn === 'function') {
+        try {
           initFn('workigom-chat-target', {
             externalUser: user?.name || 'User_' + Math.floor(Math.random() * 9999),
             className: 'workigom-sdk-wrapper'
           });
           sdkInitialized.current = true;
           setLoading(false);
-        } else {
-          // Eğer hala bulunamadıysa 1 saniye sonra tekrar dene (script yüklenme gecikmesi için)
-          setTimeout(loadAndInit, 1000);
+          setError(null);
+          return true;
+        } catch (err) {
+          console.error("SDK Init Execution Error:", err);
+          setError("Chat modülü başlatılırken bir hata oluştu.");
+          setLoading(false);
+          return true;
         }
-      } catch (err: any) {
-        console.error("Workigom Chat Integration Error:", err);
-        setError("SDK Protokolü başlatılamadı. Lütfen internet bağlantınızı veya güvenlik ayarlarınızı kontrol edin.");
-        setLoading(false);
       }
+      return false;
     };
 
-    const timer = setTimeout(loadAndInit, 300);
-    return () => clearTimeout(timer);
+    // Polling mekanizması: Script'in yüklenmesini bekle (Maksimum 5 saniye)
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts++;
+      const success = initSDK();
+      if (success || attempts > 50) { 
+        clearInterval(interval);
+        if (!success && !sdkInitialized.current) {
+          setError("Sunucuya bağlanılamadı (Proxy Handshake Timeout). Lütfen sayfayı yenileyin.");
+          setLoading(false);
+        }
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
   }, [user?.name]);
 
   return (
@@ -86,7 +85,7 @@ export const Chat: React.FC = () => {
         <div className="flex gap-4 items-center">
             <div className="hidden md:flex items-center gap-2 text-[10px] text-white/50 font-mono">
                 <Shield size={12} className="text-blue-400" />
-                <span>ROOT_BRIDGE_READY</span>
+                <span>PROXY_TUNNEL_ACTIVE</span>
             </div>
             <div className="flex gap-1.5">
                 <div className="w-3 h-3 bg-gray-600 rounded-sm"></div>
@@ -103,10 +102,10 @@ export const Chat: React.FC = () => {
             <Loader2 className="animate-spin text-emerald-500 mb-6" size={48} strokeWidth={1.5} />
             <div className="space-y-2 text-center">
                 <p className="text-emerald-500 font-mono text-xs animate-pulse tracking-[0.4em] uppercase">
-                  Initializing Root Bridge...
+                  Bypassing CORS via Proxy...
                 </p>
                 <p className="text-gray-600 font-mono text-[9px] uppercase tracking-widest">
-                  Target: workigomchat.online/index.js
+                  Tunnel: /chat-sdk/index.js
                 </p>
             </div>
           </div>
@@ -123,7 +122,7 @@ export const Chat: React.FC = () => {
                         onClick={() => window.location.reload()}
                         className="w-full bg-red-500 hover:bg-red-600 text-white font-mono text-[10px] font-bold px-6 py-3 rounded-xl uppercase transition-colors shadow-lg shadow-red-500/20"
                     >
-                        Re-Connect Node
+                        Force Reset Node
                     </button>
                 </div>
             </div>
