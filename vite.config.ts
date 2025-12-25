@@ -8,7 +8,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/chat-sdk': {
-        target: 'https://www.workigomchat.online',
+        target: 'https://workigomchat.online',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/chat-sdk/, ''),
       },
