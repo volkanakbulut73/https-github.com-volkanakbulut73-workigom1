@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Voucher } from "../types";
 
@@ -13,39 +12,39 @@ const initAI = () => {
 export const analyzeDealWithGemini = async (voucher: Voucher): Promise<string> => {
   const ai = initAI();
   if (!ai) {
-    return "Analiz şu anda yapılamıyor.";
+    return "API anahtarı eksik olduğu için analiz yapılamıyor.";
   }
 
   const prompt = `
-    Sen bir Workigom Finansal Analistisin. Kullanıcıya bir yemek çeki teklifi hakkında profesyonel ama samimi bir tavsiye ver.
+    Aşağıdaki yemek çeki teklifini bir alıcı gözüyle analiz et.
+    Piyasa koşullarında yemek çekleri genellikle %10 ila %20 indirimle nakite çevrilir.
     
-    Teklif Detayları:
-    - Firma: ${voucher.company}
-    - Bakiye: ${voucher.amount} TL
-    - Satış Fiyatı: ${voucher.price} TL
-    - Son Kullanma: ${voucher.expiryDate}
-    - Konum: ${voucher.location}
+    Çek Bilgileri:
+    Firma: ${voucher.company}
+    Kart Bakiyesi: ${voucher.amount} TL
+    Satış Fiyatı: ${voucher.price} TL
+    Son Kullanma Tarihi: ${voucher.expiryDate}
+    Konum: ${voucher.location}
 
-    Analiz Kriterleri:
-    1. İndirim Oranı: %15 ve üzeri ise 'Mükemmel Fırsat', %10-15 'İyi Teklif', %10 altı 'Standart' olarak nitelendir.
-    2. Son Kullanma Tarihi: Yakınsa (1 aydan az) kullanıcıyı uyar.
-    3. Genel Tavsiye: 2-3 cümlede, bu teklifi alıp almaması gerektiğini, nedenleriyle açıkla.
-    
-    Dil: Türkçe, Pozitif ve Kısa.
+    Lütfen kısa, samimi ve Türkçe bir tavsiye ver. 
+    Bu iyi bir fırsat mı? Riskler neler olabilir? (Örn: Son kullanma tarihi yakın mı?)
+    Cevabın 2-3 cümleyi geçmesin.
   `;
 
   try {
+    // Model choice based on guidelines for Basic Text Tasks
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 0 }
+        thinkingConfig: { thinkingBudget: 0 } // Disable thinking for faster simple response
       }
     });
 
-    return response.text || "Bu teklif hakkında şu an yorum yapamıyorum.";
+    // response.text is a getter property, not a method
+    return response.text || "Analiz şu anda yapılamadı.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Yapay zeka analizine şu an ulaşılamıyor.";
+    return "Yapay zeka servisine bağlanırken bir hata oluştu.";
   }
 };
