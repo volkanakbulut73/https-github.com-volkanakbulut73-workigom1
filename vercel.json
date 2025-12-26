@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/chat-sdk/:path*",
+      "destination": "https://workigomchat.online/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

@@ -2,7 +2,10 @@
 import { createClient } from '@supabase/supabase-js';
 
 // @ts-ignore
-const env = import.meta.env || {};
+/**
+ * Fix: Casting env to any to resolve property access errors on potentially empty object.
+ */
+const env: any = import.meta.env || {};
 
 const supabaseUrl = env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || '';

@@ -5,26 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Workigom - Sosyal Dayanışma Platformu</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.2.0",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-    "react-dom": "https://esm.sh/react-dom@18.2.0",
-    "react/": "https://esm.sh/react@18.2.0/",
-    "lucide-react": "https://esm.sh/lucide-react@0.344.0?deps=react@18.2.0",
-    "react-router-dom": "https://esm.sh/react-router-dom@6.22.3?deps=react@18.2.0,react-dom@18.2.0",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7",
-    "vite": "https://esm.sh/vite@5.1.4",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@4.2.1",
-    "@google/genai": "https://esm.sh/@google/genai@0.1.1",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.2/"
-  }
-}
-</script>
-</head>
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "react-dom": "https://esm.sh/react-dom@18.2.0",
+        "react/": "https://esm.sh/react@18.2.0/",
+        "lucide-react": "https://esm.sh/lucide-react@0.344.0?deps=react@18.2.0",
+        "react-router-dom": "https://esm.sh/react-router-dom@6.22.3?deps=react@18.2.0,react-dom@18.2.0",
+        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7",
+        "vite": "https://esm.sh/vite@5.1.4",
+        "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@4.2.1",
+        "@google/genai": "https://esm.sh/@google/genai@0.1.1",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.2/"
+      }
+    }
+    </script>
+  </head>
   <body>
     <div id="root"></div>
+    <!-- Workigom Chat SDK v1.1.1 - Always use apex domain to avoid CORS issues -->
+    <script type="module" crossorigin src="https://workigomchat.online/index.js"></script>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
