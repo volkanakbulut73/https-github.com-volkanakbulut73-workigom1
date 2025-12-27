@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Plus, Heart, User, MessageCircle } from 'lucide-react';
+import { Home, Plus, Heart, User } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
   const location = useLocation();
@@ -28,7 +27,6 @@ export const BottomNav: React.FC = () => {
   );
 
   return (
-    // Added md:hidden to hide on desktop
     <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-100 pb-safe z-50 h-[60px] flex items-center shadow-[0_-4px_20px_rgba(0,0,0,0.02)] md:hidden">
       <NavItem to="/app" icon={Home} label="Ana Sayfa" active={isActive('/app')} />
       <NavItem to="/supporters" icon={Heart} label="Talepler" active={isActive('/supporters')} />
@@ -41,7 +39,7 @@ export const BottomNav: React.FC = () => {
         </Link>
       </div>
 
-      <NavItem to="/chat" icon={MessageCircle} label="Sohbet" active={isActive('/chat')} />
+      <NavItem to="/swap" icon={User} label="Pazar" active={isActive('/swap')} />
       <NavItem to="/profile" icon={User} label="Profil" active={isActive('/profile')} />
     </nav>
   );

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { BottomNav } from './components/BottomNav';
@@ -18,7 +17,6 @@ import { Register } from './pages/Register';
 import { Invite } from './pages/Invite';
 import { Earnings } from './pages/Earnings';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
-import { Chat } from './pages/Chat';
 import { ReferralService, DBService, User } from './types'; 
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
@@ -130,7 +128,6 @@ const AppRoutes: React.FC = () => (
       <Route path="/swap/:id" element={<SwapDetail />} />
       <Route path="/invite" element={<Invite />} />
       <Route path="/earnings" element={<Earnings />} />
-      <Route path="/chat" element={<Chat />} />
     </Route>
     
     {/* Tanımsız Rotalar için Yönlendirme */}

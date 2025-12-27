@@ -1,7 +1,6 @@
-
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Heart, ArrowLeftRight, User, LogOut, Plus, Wallet, MessageCircle } from 'lucide-react';
+import { Home, Heart, ArrowLeftRight, User, LogOut, Plus, Wallet } from 'lucide-react';
 import { ReferralService } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -60,7 +59,6 @@ export const Sidebar: React.FC = () => {
           <NavItem to="/app" icon={Home} label="Ana Sayfa" />
           <NavItem to="/supporters" icon={Heart} label="Paylaşım Talepleri" />
           <NavItem to="/swap" icon={ArrowLeftRight} label="Takas Pazarı" />
-          <NavItem to="/chat" icon={MessageCircle} label="Sohbet" />
           
           <div className="my-4 border-t border-gray-100 mx-4"></div>
           
@@ -78,10 +76,10 @@ export const Sidebar: React.FC = () => {
         </button>
 
         <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => navigate('/profile')}>
-           <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full object-cover border border-gray-100" />
+           <img src={user?.avatar || "https://picsum.photos/100/100"} alt={user?.name} className="w-10 h-10 rounded-full object-cover border border-gray-100" />
            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-slate-900 truncate">{user.name}</p>
-              <p className="text-xs text-gray-400 truncate">Bakiye: ₺{user.wallet.balance}</p>
+              <p className="text-sm font-bold text-slate-900 truncate">{user?.name || 'Kullanıcı'}</p>
+              <p className="text-xs text-gray-400 truncate">Bakiye: ₺{user?.wallet?.balance || 0}</p>
            </div>
            <button onClick={(e) => { e.stopPropagation(); handleLogout(); }} className="text-gray-400 hover:text-red-500 transition-colors">
               <LogOut size={18} />

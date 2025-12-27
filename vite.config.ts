@@ -5,13 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    proxy: {
-      '/chat-sdk': {
-        target: 'https://workigomchat.online',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/chat-sdk/, ''),
-      },
-    },
+    proxy: {},
   },
   build: {
     outDir: 'dist',

@@ -1,11 +1,11 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// @ts-ignore
 /**
- * Fix: Casting env to any to resolve property access errors on potentially empty object.
+ * Fix: Cast import.meta to any to safely access Vite's environment variables 
+ * even if vite/client type definitions are not correctly loaded in the TS context.
  */
-const env: any = import.meta.env || {};
+const env: any = (import.meta as any).env || {};
 
 const supabaseUrl = env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || '';
